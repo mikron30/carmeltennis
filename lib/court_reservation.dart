@@ -9,8 +9,9 @@ class CourtReservations extends StatefulWidget {
 
 class CourtReservationsState extends State<CourtReservations> {
   DateTime selectedDate = DateTime.now();
-  // A list of maps for each court's reservations
-  List<Map<int, bool>> courtsReservations = List.generate(3, (_) => {});
+  // Sample data for two courts
+  Map<int, bool> court1Reservations = {for (var i = 7; i <= 21; i++) i: false};
+  Map<int, bool> court2Reservations = {for (var i = 7; i <= 21; i++) i: false};
 
   @override
   void initState() {
@@ -18,54 +19,49 @@ class CourtReservationsState extends State<CourtReservations> {
     _initializeReservations();
   }
 
-  dynamic _initializeReservations() {
-    for (var court in courtsReservations) {
-      for (var i = 7; i <= 21; i++) {
-        court[i] = false;
-      }
+  void _initializeReservations() {
+    for (var i = 7; i <= 21; i++) {
+      court1Reservations[i] = false;
+      court2Reservations[i] = false;
     }
   }
 
   void reserve(int courtNumber, int hour) {
     setState(() {
-      courtsReservations[courtNumber][hour] = true;
+      if (courtNumber == 1) {
+        // Use the null-aware operator to provide a default value (false)
+        court1Reservations[hour] = !(court1Reservations[hour] ?? false);
+      } else if (courtNumber == 2) {
+        // Use the null-aware operator to provide a default value (false)
+        court2Reservations[hour] = !(court2Reservations[hour] ?? false);
+      }
     });
   }
 
-  Widget _buildCourtReservations(int courtNumber) {
-    Map<int, bool> reservations = courtsReservations[courtNumber];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: reservations.length,
-      itemBuilder: (context, index) {
-        int hour = reservations.keys.elementAt(index);
-        String displayHour = hour > 12 ? '${hour - 12} PM' : '$hour AM';
-        bool isReserved =
-            reservations[hour] ?? false; // Use the null-aware operator
+  Widget buildCourt(int courtNumber, Map<int, bool> reservations) {
+    List<Widget> reservationWidgets = reservations.entries.map((entry) {
+      return ListTile(
+        title: Text('Court $courtNumber - ${entry.key}:00'),
+        trailing: entry.value
+            ? Icon(Icons.check, color: Colors.green)
+            : Icon(Icons.close, color: Colors.red),
+        onTap: () => reserve(courtNumber, entry.key),
+      );
+    }).toList();
 
-        return ListTile(
-          title: Text('Court ${courtNumber + 1} - $displayHour'),
-          trailing: isReserved
-              ? const Icon(Icons.check, color: Colors.green)
-              : const Icon(Icons.close, color: Colors.red),
-          onTap: () => reserve(courtNumber, hour),
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: reservationWidgets,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('מועדון הכרמל')),
-      body: Column(
+    return SingleChildScrollView(
+      child: Column(
         children: <Widget>[
-          Text('Date: ${selectedDate.toLocal()}'),
-          for (int i = 0; i < courtsReservations.length; i++)
-            Expanded(
-              child: _buildCourtReservations(i),
-            ),
+          buildCourt(1, court1Reservations),
+          buildCourt(2, court2Reservations),
         ],
       ),
     );
