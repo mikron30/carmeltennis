@@ -39,31 +39,38 @@ class CourtReservationsState extends State<CourtReservations> {
   }
 
   Widget buildCourt(int courtNumber, Map<int, bool> reservations) {
-    List<Widget> reservationWidgets = reservations.entries.map((entry) {
-      return ListTile(
-        title: Text('Court $courtNumber - ${entry.key}:00'),
-        trailing: entry.value
-            ? Icon(Icons.check, color: Colors.green)
-            : Icon(Icons.close, color: Colors.red),
-        onTap: () => reserve(courtNumber, entry.key),
-      );
-    }).toList();
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: reservationWidgets,
+      children: reservations.entries.map((entry) {
+        return ListTile(
+          title: Text('Court $courtNumber - ${entry.key}:00'),
+          trailing: entry.value
+              ? Icon(Icons.check, color: Colors.green)
+              : Icon(Icons.close, color: Colors.red),
+          onTap: () => reserve(courtNumber, entry.key),
+        );
+      }).toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: <Widget>[
-          buildCourt(1, court1Reservations),
-          buildCourt(2, court2Reservations),
-        ],
-      ),
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              buildCourt(1, court1Reservations),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              buildCourt(2, court2Reservations),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
