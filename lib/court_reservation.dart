@@ -8,6 +8,7 @@ class CourtReservations extends StatefulWidget {
 }
 
 class CourtReservationsState extends State<CourtReservations> {
+  CourtReservationsState(); // Constructor
   DateTime selectedDate = DateTime.now();
   // Sample data for two courts
   Map<int, bool> court1Reservations = {for (var i = 7; i <= 21; i++) i: false};

@@ -1,21 +1,28 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
-import 'guest_book_message.dart';
 
 class ApplicationState extends ChangeNotifier {
   ApplicationState() {
     init();
   }
+  static ApplicationState? _instance; // Store the current instance
+
+  // Static method to get the current instance
+  static ApplicationState getInstance() {
+    if (_instance == null) {
+      _instance = ApplicationState();
+    }
+    return _instance!;
+  }
 
   bool _loggedIn = false;
   bool get loggedIn => _loggedIn;
-
+  String? userName = "";
   Future<void> init() async {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
@@ -27,47 +34,12 @@ class ApplicationState extends ChangeNotifier {
     FirebaseAuth.instance.userChanges().listen((user) {
       if (user != null) {
         _loggedIn = true;
-        _guestBookSubscription = FirebaseFirestore.instance
-            .collection('guestbook')
-            .orderBy('timestamp', descending: true)
-            .snapshots()
-            .listen((snapshot) {
-          _guestBookMessages = [];
-          for (final document in snapshot.docs) {
-            _guestBookMessages.add(
-              GuestBookMessage(
-                name: document.data()['name'] as String,
-                message: document.data()['text'] as String,
-              ),
-            );
-          }
-          notifyListeners();
-        });
+        userName = FirebaseAuth.instance.currentUser?.displayName;
       } else {
+        userName = "";
         _loggedIn = false;
-        _guestBookMessages = [];
-        _guestBookSubscription?.cancel();
       }
       notifyListeners();
     });
   }
-
-  Future<DocumentReference> addMessageToGuestBook(String message) async {
-    if (!_loggedIn) {
-      throw Exception('Must be logged in');
-    }
-    var documentReference =
-        await FirebaseFirestore.instance.collection('guestbook').add({
-      'text': message,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'name': FirebaseAuth.instance.currentUser!.displayName,
-      'userId': FirebaseAuth.instance.currentUser!.uid,
-    });
-
-    return documentReference;
-  }
-
-  StreamSubscription<QuerySnapshot>? _guestBookSubscription;
-  List<GuestBookMessage> _guestBookMessages = [];
-  List<GuestBookMessage> get guestBookMessages => _guestBookMessages;
 }

@@ -23,18 +23,25 @@ class HomePage extends StatelessWidget {
         centerTitle: true,
       ),
       body: Column(
-        // Correct usage of Column
         children: <Widget>[
-          const DateSelector(), // DateSelector widget
+          const DateSelector(),
           Consumer<ApplicationState>(
-            builder: (context, appState, _) => AuthFunc(
+            builder: (context, appState, _) {
+              return AuthFunc(
                 loggedIn: appState.loggedIn,
                 signOut: () {
                   FirebaseAuth.instance.signOut();
-                }),
+                },
+              );
+            },
           ),
           const SizedBox(height: 8),
-          const CourtReservations(), // CourtReservations widget
+          // Pass the user's name to the CourtReservations widget
+          Consumer<ApplicationState>(
+            builder: (context, appState, _) {
+              return CourtReservations();
+            },
+          ),
         ],
       ),
     );

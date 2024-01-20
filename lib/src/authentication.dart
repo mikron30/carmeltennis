@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'widgets.dart';
+import '../app_state.dart';
 
 class AuthFunc extends StatelessWidget {
   const AuthFunc({
@@ -19,6 +20,8 @@ class AuthFunc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final applicationState = ApplicationState.getInstance();
+
     return Row(
       children: [
         Padding(
@@ -27,19 +30,25 @@ class AuthFunc extends StatelessWidget {
               onPressed: () {
                 !loggedIn ? context.push('/sign-in') : signOut();
               },
-              child: !loggedIn ? const Text('RSVP') : const Text('Logout')),
+              child: !loggedIn ? const Text('התחבר') : const Text('התנתק')),
         ),
         Visibility(
           visible: loggedIn,
           child: Padding(
             padding: const EdgeInsets.only(left: 24, bottom: 8),
             child: StyledButton(
-                onPressed: () {
-                  context.push('/profile');
-                },
-                child: const Text('Profile')),
+              onPressed: () {
+                context.push('/profile');
+              },
+              child: Row(
+                children: [
+                  const Text('שלום, '),
+                  Text(applicationState.userName ?? 'User'),
+                ],
+              ),
+            ),
           ),
-        )
+        ),
       ],
     );
   }
