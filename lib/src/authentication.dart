@@ -6,22 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'widgets.dart';
-import '../app_state.dart';
 
 class AuthFunc extends StatelessWidget {
+  final bool loggedIn;
+  final void Function() signOut;
+
   const AuthFunc({
     super.key,
     required this.loggedIn,
     required this.signOut,
   });
 
-  final bool loggedIn;
-  final void Function() signOut;
-
-  @override
   Widget build(BuildContext context) {
-    final applicationState = ApplicationState.getInstance();
-
     return Row(
       children: [
         Padding(
@@ -43,7 +39,6 @@ class AuthFunc extends StatelessWidget {
               child: Row(
                 children: [
                   const Text('שלום, '),
-                  Text(applicationState.userName ?? 'User'),
                 ],
               ),
             ),
