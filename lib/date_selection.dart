@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 class DateSelector extends StatefulWidget {
-  const DateSelector({super.key});
+  final Function(DateTime)
+      onDateSelected; // Callback function to pass the selected date
+
+  DateSelector({required this.onDateSelected, Key? key}) : super(key: key);
 
   @override
   DateSelectorState createState() => DateSelectorState();
@@ -22,6 +25,8 @@ class DateSelectorState extends State<DateSelector> {
       setState(() {
         selectedDate = picked;
       });
+      // Call the callback function to pass the selected date
+      widget.onDateSelected(selectedDate);
     }
   }
 
