@@ -1,0 +1,100 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter pub get
+
+## exception
+
+FileSystemException: FileSystemException: readInto failed, path = 'C:\Users\mzilbers\OneDrive - Intel Corporation\Documents\carmeltennis\.flutter-plugins' (OS Error: The cloud operation was not completed before the time-out period expired.
+, errno = 426)
+
+```
+#0      _RandomAccessFile.readIntoSync (dart:io/file_impl.dart:835:7)
+#1      _File.readAsBytesSync (dart:io/file_impl.dart:593:35)
+#2      _File.readAsStringSync (dart:io/file_impl.dart:624:18)
+#3      ForwardingFile.readAsStringSync (package:file/src/forwarding/forwarding_file.dart:99:16)
+#4      ErrorHandlingFile.readAsStringSync.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:217:22)
+#5      _runSync (package:flutter_tools/src/base/error_handling_io.dart:587:14)
+#6      ErrorHandlingFile.readAsStringSync (package:flutter_tools/src/base/error_handling_io.dart:216:12)
+#7      _readFileContent (package:flutter_tools/src/flutter_plugins.dart:275:35)
+#8      _writeFlutterPluginsListLegacy (package:flutter_tools/src/flutter_plugins.dart:266:40)
+#9      refreshPluginsList (package:flutter_tools/src/flutter_plugins.dart:1118:30)
+<asynchronous suspension>
+#10     FlutterProject.ensureReadyForPlatformSpecificTooling (package:flutter_tools/src/project.dart:369:5)
+<asynchronous suspension>
+#11     PackagesGetCommand.runCommand (package:flutter_tools/src/commands/packages.dart:382:7)
+<asynchronous suspension>
+#12     FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1389:27)
+<asynchronous suspension>
+#13     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:153:19)
+<asynchronous suspension>
+#14     CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#15     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:355:9)
+<asynchronous suspension>
+#16     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:153:19)
+<asynchronous suspension>
+#17     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:295:5)
+<asynchronous suspension>
+#18     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:119:9)
+<asynchronous suspension>
+#19     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:153:19)
+<asynchronous suspension>
+#20     main (package:flutter_tools/executable.dart:90:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.19.0, on Microsoft Windows [Version 10.0.22631.3007], locale en-IL)
+    [32m•[39m Flutter version 3.19.0 on channel stable at C:\Users\mzilbers\flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision bae5e49bc2 (5 days ago), 2024-02-13 17:46:18 -0800
+    [32m•[39m Engine revision 04817c99c9
+    [32m•[39m Dart version 3.3.0
+    [32m•[39m DevTools version 2.31.1
+
+[32m[✓][39m Windows Version (Installed version of Windows is version 10 or higher)
+
+[31m[✗][39m Android toolchain - develop for Android devices
+    [31m✗[39m Unable to locate Android SDK.
+      Install Android Studio from: https://developer.android.com/studio/index.html
+      On first launch it will assist you in installing the Android SDK components.
+      (or visit https://flutter.dev/docs/get-started/install/windows#android-setup for detailed instructions).
+      If the Android SDK has been installed to a custom location, please use
+      `flutter config --android-sdk` to update to that location.
+
+
+[32m[✓][39m Chrome - develop for the web
+    [32m•[39m Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+
+[32m[✓][39m Visual Studio - develop Windows apps (Visual Studio Professional 2022 17.8.6)
+    [32m•[39m Visual Studio at C:\Program Files\Microsoft Visual Studio\2022\Professional
+    [32m•[39m Visual Studio Professional 2022 version 17.8.34525.116
+    [32m•[39m Windows 10 SDK version 10.0.22621.0
+
+[32m[✓][39m Android Studio (version 2023.1)
+    [32m•[39m Android Studio at C:\Program Files\Android\Android Studio
+    [32m•[39m Flutter plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/9212-flutter
+    [32m•[39m Dart plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/6351-dart
+    [32m•[39m Java version openjdk version "17.0.7" 2023-04-18
+
+[32m[✓][39m VS Code (version 1.86.2)
+    [32m•[39m VS Code at C:\Users\mzilbers\AppData\Local\Programs\Microsoft VS Code
+    [32m•[39m Flutter extension version 3.82.0
+
+[32m[✓][39m Connected device (3 available)
+    [32m•[39m Windows (desktop) • windows • windows-x64    • Microsoft Windows [Version 10.0.22631.3007]
+    [32m•[39m Chrome (web)      • chrome  • web-javascript • Google Chrome 121.0.6167.185
+    [32m•[39m Edge (web)        • edge    • web-javascript • Microsoft Edge 121.0.2277.128
+
+[32m[✓][39m Network resources
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 1 category.
+```
