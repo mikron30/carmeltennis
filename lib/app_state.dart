@@ -7,19 +7,17 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'court_reserved.dart';
+import 'navigation_service.dart';
 
 class ApplicationState extends ChangeNotifier {
-  ApplicationState();
+  ApplicationState._privateConstructor();
 
-  // Static method to get the current instance or create a new one if it doesn't exist
-  static ApplicationState getInstance() {
-    if (_instance == null) {
-      _instance = ApplicationState();
-    }
-    return _instance!;
+  static final ApplicationState _instance =
+      ApplicationState._privateConstructor();
+
+  factory ApplicationState() {
+    return _instance;
   }
-
-  static ApplicationState? _instance; // Store the current instance
 
   bool _loggedIn = false;
   bool get loggedIn => _loggedIn;
@@ -29,7 +27,8 @@ class ApplicationState extends ChangeNotifier {
 
   Future<void> init() async {
     await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform);
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
     FirebaseUIAuth.configureProviders([
       EmailAuthProvider(),
@@ -37,18 +36,34 @@ class ApplicationState extends ChangeNotifier {
 
     FirebaseAuth.instance.userChanges().listen((user) async {
       if (user != null) {
-        _loggedIn = true;
-        userName = FirebaseAuth.instance.currentUser?.displayName;
-        QuerySnapshot querySnapshot =
-            await FirebaseFirestore.instance.collection('reservations').get();
-        _courtsReserved = querySnapshot.docs.map((doc) {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          return CourtReserved(
-            user: data['userName'] as String,
-            date: data['date'] as String,
-            hour: data['hour'] as int,
-          );
-        }).toList();
+        try {
+          _loggedIn = true;
+          userName = FirebaseAuth.instance.currentUser?.displayName;
+          // Check if it's the user's first login
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection('users_2024')
+              .doc(user.uid)
+              .get();
+          bool isFirstLogin =
+              (userDoc.data() as Map<String, dynamic>)['isFirstLogin'] ?? false;
+
+          if (isFirstLogin) {
+            final NavigationService navigationService = NavigationService();
+            navigationService.navigateTo('change-password');
+          }
+        } catch (e) {}
+        try {
+          QuerySnapshot querySnapshot =
+              await FirebaseFirestore.instance.collection('reservations').get();
+          _courtsReserved = querySnapshot.docs.map((doc) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            return CourtReserved(
+              user: data['userName'] as String,
+              date: data['date'] as String,
+              hour: data['hour'] as int,
+            );
+          }).toList();
+        } catch (e) {}
       } else {
         userName = "";
         _loggedIn = false;

@@ -4,6 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart'
+    hide EmailAuthProvider, PhoneAuthProvider;
 
 import 'widgets.dart';
 
@@ -17,7 +19,10 @@ class AuthFunc extends StatelessWidget {
     required this.signOut,
   });
 
+  @override
   Widget build(BuildContext context) {
+    final String? userName = FirebaseAuth.instance.currentUser?.displayName;
+    final String user1 = userName ?? '';
     return Row(
       children: [
         Padding(
@@ -38,7 +43,7 @@ class AuthFunc extends StatelessWidget {
               },
               child: Row(
                 children: [
-                  const Text('שלום, '),
+                  Text('שלום $user1'),
                 ],
               ),
             ),

@@ -12,8 +12,11 @@ import 'app_state.dart';
 import 'court_reservation.dart';
 import 'date_selection.dart';
 import 'src/authentication.dart';
+import 'user_manager.dart';
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
   _HomepageState createState() => _HomepageState();
 }
@@ -26,34 +29,80 @@ class _HomepageState extends State<HomePage> {
   List<String> allUsers = []; // This should be fetched from your backend
   List<String> lastSelectedUsers =
       []; // This should be fetched from SharedPreferences or similar
+  String? myUserName;
+
+  void _showInvalidDateMessage(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Invalid Date'),
+        content: const Text('ניתן להזמין רק להיום ולמחר'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('אישור'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Callback function to update the selected date
-  void updateSelectedDate(DateTime newDate) {
-    selectedDate = newDate;
-    setState(() {
-      selectedDate = newDate;
-    });
+  void updateSelectedDate(BuildContext context, DateTime newDate) {
+    DateTime now = DateTime.now();
+    DateTime today = DateTime(now.year, now.month, now.day);
+    DateTime tomorrow = DateTime(now.year, now.month, now.day + 1);
+
+    if (newDate.isAtSameMomentAs(today) || newDate.isAtSameMomentAs(tomorrow)) {
+      setState(() {
+        selectedDate = newDate;
+      });
+    } else {
+      setState(() {
+        selectedDate = today;
+      });
+      _showInvalidDateMessage(context);
+    }
+  }
+
+  void fetchMyUserName() async {
+    try {
+      String? userEmail =
+          FirebaseAuth.instance.currentUser?.email; // Now assigns user's email
+      myUserName =
+          await UserManager.instance.getUsernameByEmail(userEmail ?? '');
+    } catch (e) {
+      // Handle the error accordingly
+    }
   }
 
   void fetchAllUsers() async {
     try {
+      String? userEmail =
+          FirebaseAuth.instance.currentUser?.email; // Now assigns user's email
+      myUserName =
+          await UserManager.instance.getUsernameByEmail(userEmail ?? '');
+
       // Query the 'users_2024' collection
       QuerySnapshot querySnapshot =
           await FirebaseFirestore.instance.collection('users_2024').get();
 
-      // Process each document
-      List<String> fetchedUsers = querySnapshot.docs.map((doc) {
-        String firstName =
-            doc['שם פרטי']; // Assuming field names are exactly these
-        String lastName = doc['שם משפחה'];
-        return '$firstName $lastName'; // Concatenate to form a full name
-      }).toList();
+      List<String> fetchedUsers = querySnapshot.docs
+          .map((doc) {
+            String firstName =
+                doc['שם פרטי']; // Assuming field names are exactly these
+            String lastName = doc['שם משפחה'];
+            return '$firstName $lastName'; // Concatenate to form a full name
+          })
+          .where((userName) =>
+              userName != myUserName) // Filter out the current user's name
+          .toList();
 
       // Update suggestionsList with the fetched and processed users
       setState(() {
         suggestionsList = fetchedUsers;
       });
     } catch (e) {
-      print("Error fetching users: $e");
       // Handle the error accordingly
     }
   }
@@ -62,15 +111,33 @@ class _HomepageState extends State<HomePage> {
   void initState() {
     super.initState();
     selectedDate = DateTime.now();
-    fetchAllUsers();
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // User is logged in
+      fetchAllUsers();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final User? user = FirebaseAuth.instance.currentUser;
+    final bool loggedIn = FirebaseAuth.instance.currentUser != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('מועדון הכרמל'),
+        title: const Text(''), // Keep empty or use a different title
         centerTitle: true,
+        leading: Builder(
+          builder: (BuildContext context) {
+            return IconButton(
+              icon: const Icon(Icons.menu), // Hamburger icon for the drawer
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer(); // Open the drawer
+              },
+              tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+            );
+          },
+        ),
       ),
       body: Column(
         children: <Widget>[
@@ -81,21 +148,14 @@ class _HomepageState extends State<HomePage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Flexible(
-                  child: DateSelector(onDateSelected: updateSelectedDate),
-                ),
-                Flexible(
-                  child: Consumer<ApplicationState>(
-                    builder: (context, appState, _) {
-                      return AuthFunc(
-                        loggedIn: appState.loggedIn,
-                        signOut: () {
-                          FirebaseAuth.instance.signOut();
-                        },
-                      );
-                    },
+                if (user != null) // User is logged in
+                  Flexible(
+                    child: DateSelector(
+                      onDateSelected: (DateTime date) {
+                        updateSelectedDate(context, date);
+                      },
+                    ),
                   ),
-                ),
                 Flexible(
                   child: Autocomplete<String>(
                     optionsBuilder: (TextEditingValue textEditingValue) {
@@ -115,6 +175,52 @@ class _HomepageState extends State<HomePage> {
                       });
                       // Update last selected users list here
                     },
+                    fieldViewBuilder: (
+                      BuildContext context,
+                      TextEditingController fieldTextEditingController,
+                      FocusNode fieldFocusNode,
+                      VoidCallback onFieldSubmitted,
+                    ) {
+                      return TextField(
+                        controller: fieldTextEditingController,
+                        focusNode: fieldFocusNode,
+                        decoration: InputDecoration(
+                          hintText: "הכנס שם שותף", // Placeholder text
+                          // Additional decoration to match your app's style
+                        ),
+                        // Add any additional styling or functionality to the TextField here
+                      );
+                    },
+                    optionsViewBuilder: (
+                      BuildContext context,
+                      AutocompleteOnSelected<String> onSelected,
+                      Iterable<String> options,
+                    ) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          child: Container(
+                            width: 300, // Adjust the width as needed
+                            height: 200, // Adjust the height as needed
+                            child: ListView.builder(
+                              padding: EdgeInsets.all(10.0),
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final String option = options.elementAt(index);
+                                return GestureDetector(
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                  child: ListTile(
+                                    title: Text(option),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -122,17 +228,50 @@ class _HomepageState extends State<HomePage> {
           ),
           const SizedBox(height: 8),
           // CourtReservations widget
-          Expanded(
-            child: Consumer<ApplicationState>(
-              builder: (context, appState, _) {
-                return CourtReservations(
-                  selectedDate: selectedDate ?? DateTime.now(),
-                  selectedPartner: selectedPartner ?? '',
-                );
-              },
+          if (user != null) // User is logged in
+            Expanded(
+              child: Consumer<ApplicationState>(
+                builder: (context, appState, _) {
+                  fetchMyUserName();
+                  return CourtReservations(
+                    selectedDate: selectedDate ?? DateTime.now(),
+                    selectedPartner: selectedPartner ?? '',
+                    myUserName: myUserName,
+                  );
+                },
+              ),
             ),
-          ),
         ],
+      ),
+      endDrawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Text(
+                  loggedIn
+                      ? 'שלום ${FirebaseAuth.instance.currentUser?.displayName ?? "אורח"}'
+                      : 'אורח',
+                  style: const TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            // Directly use AuthFunc here
+            ListTile(
+              title: AuthFunc(
+                loggedIn: loggedIn,
+                signOut: () {
+                  FirebaseAuth.instance.signOut();
+                  setState(() {});
+                  // Optionally, navigate to a different page after logging out
+                  Navigator.of(context).pop(); // Close the drawer
+                },
+              ),
+            ),
+            // Additional drawer items...
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'home_page.dart';
 import 'user_manager.dart';
+import 'change_password.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,13 +18,18 @@ void main() async {
 
   runApp(ChangeNotifierProvider(
     create: (context) => ApplicationState(),
-    builder: ((context, child) => App()),
+    builder: ((context, child) => const App()),
   ));
+}
+
+void navigateToChangePassword(BuildContext context) {
+  // Navigation logic to the Change Password screen
+  Navigator.pushNamed(context, '/change-password');
 }
 
 // Change MaterialApp to MaterialApp.router and add the routerConfig
 class App extends StatelessWidget {
-  App({super.key});
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +57,7 @@ final _router = GoRouter(
   routes: [
     GoRoute(
       path: '/',
-      builder: (context, state) => HomePage(),
+      builder: (context, state) => const HomePage(),
       routes: [
         GoRoute(
           path: 'sign-in',
@@ -117,6 +123,10 @@ final _router = GoRouter(
               ],
             );
           },
+        ),
+        GoRoute(
+          path: 'change-password',
+          builder: (context, state) => const ChangePasswordScreen(),
         ),
       ],
     ),
