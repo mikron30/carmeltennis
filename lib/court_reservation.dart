@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'reservation.dart';
-import 'user_manager.dart';
 import 'reservation_manager.dart';
+import 'package:intl/intl.dart';
 
 class CourtReservations extends StatefulWidget {
   final DateTime selectedDate; // Selected date passed from DateSelector
@@ -22,29 +22,22 @@ class CourtReservations extends StatefulWidget {
 
 class CourtReservationsState extends State<CourtReservations> {
   CourtReservationsState(); // Constructor to receive the selected date
-  Future<void>? _reservationsFuture;
+  Future<Map<String, dynamic>>? _reservationsFuture;
 
-  // Sample data for two courts
-  Map<int, Map<dynamic, dynamic>> court1Reservations = {
-    for (var i = 7; i <= 21; i++)
-      i: {'isReserved': false, 'userName': '', 'partner': ''},
-  };
+  // Dynamic list to store reservations for each court
+  List<Map<int, Map<String, dynamic>>> courtsReservations = [];
+  bool isWeekend(DateTime date) {
+    // In Dart, weekday 6 represents Friday and 7 represents Saturday
+    return date.weekday == DateTime.friday || date.weekday == DateTime.saturday;
+  } // Example: Initializing for 2 courts, you can adjust based on actual number
 
-  Map<int, Map<dynamic, dynamic>> court2Reservations = {
-    for (var i = 7; i <= 21; i++)
-      i: {'isReserved': false, 'userName': '', 'partner': ''},
-  };
-
-  void initReservations() {
-    // Initialize or reset your reservations data here
-    court1Reservations = {
-      for (var i = 7; i <= 21; i++)
-        i: {'isReserved': false, 'userName': '', 'partner': ''},
-    };
-    court2Reservations = {
-      for (var i = 7; i <= 21; i++)
-        i: {'isReserved': false, 'userName': '', 'partner': ''},
-    };
+  void initReservations(int numberOfCourts) {
+    courtsReservations = List.generate(
+        numberOfCourts,
+        (index) => {
+              for (var i = 7; i <= 21; i++)
+                i: {'isReserved': false, 'userName': '', 'partner': ''}
+            });
     if (mounted) {
       setState(() {}); // Ensure UI is updated to reflect the reset state
     }
@@ -53,10 +46,9 @@ class CourtReservationsState extends State<CourtReservations> {
   @override
   void initState() {
     DateTime selectedDate = widget.selectedDate;
-    String formattedDate =
-        "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
-    initReservations();
-    _getReservationsForDate(formattedDate);
+
+    initReservations(isWeekend(selectedDate) ? 3 : 2);
+    _getReservationsForDate(selectedDate);
     super.initState();
     _fetchReservations();
   }
@@ -70,30 +62,25 @@ class CourtReservationsState extends State<CourtReservations> {
   }
 
   void _fetchReservations() {
-    String formattedDate =
-        "${widget.selectedDate.year}-${widget.selectedDate.month.toString().padLeft(2, '0')}-${widget.selectedDate.day.toString().padLeft(2, '0')}";
-    _reservationsFuture = _getReservationsForDate(formattedDate);
+    _reservationsFuture = _getReservationsForDate(widget.selectedDate);
   }
 
-  Future<void> _getReservationsForDate(String formattedDate) async {
+  Future<Map<String, dynamic>> _getReservationsForDate(
+      DateTime selectedDate) async {
+    Map<String, dynamic> reservationsData = {}; // Initialize an empty map
+    String formattedDate =
+        "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
     try {
       final User? user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
-        court1Reservations.clear();
-        court2Reservations.clear();
-        for (var i = 7; i <= 21; i++) {
-          court1Reservations[i] = {
-            'isReserved': false,
-            'userName': '',
-            'partner': ''
-          };
-          court2Reservations[i] = {
-            'isReserved': false,
-            'userName': '',
-            'partner': ''
-          };
+        int numberOfCourts = isWeekend(selectedDate) ? 3 : 2;
+        for (int i = 1; i <= numberOfCourts; i++) {
+          reservationsData[i.toString()] =
+              {}; // Use court number as a string key
         }
+        initReservations(numberOfCourts);
+
         final query = FirebaseFirestore.instance
             .collection('reservations')
             .where('date', isEqualTo: formattedDate);
@@ -115,33 +102,34 @@ class CourtReservationsState extends State<CourtReservations> {
               partner: data['partner'],
             );
             reservations.add(reservation);
-            if (reservation.court == 1) {
-              court1Reservations[reservation.time] = {
-                'isReserved': true,
-                'userName': reservation.user,
-                'partner': reservation.partner,
-              };
-            }
-            if (reservation.court == 2) {
-              court2Reservations[reservation.time] = {
-                'isReserved': true,
-                'userName': reservation.user,
-                'partner': reservation.partner,
-              };
-            }
+            // Assuming 'courtNumber' is a 1-based index
+            int courtIndex = reservation.court - 1;
+            courtsReservations[courtIndex][reservation.time] = {
+              'isReserved': true,
+              'userName': reservation.user,
+              'partner': reservation.partner,
+            };
+            String courtNumber = data['courtNumber'].toString();
+            int hour = data['hour'];
+            reservationsData[courtNumber][hour] = {
+              'isReserved': true,
+              'userName': data['userName'],
+              'partner': data['partner'],
+              // Add any other reservation detail you want to include
+            };
           }
           setState(() {});
         }
         setState(() {});
       }
     } catch (e) {
-      print('Error fetching reservations: $e');
       if (mounted) {
         setState(() {
           // Update your state to reflect the error if necessary
         });
       }
     }
+    return reservationsData; // Return the populated map
   }
 
   void _reserve(int courtNumber, int hour) async {
@@ -170,17 +158,34 @@ class CourtReservationsState extends State<CourtReservations> {
           final storedUserName = data['userName'];
           if (storedUserName == widget.myUserName) {
             try {
-              await firstDocument.reference.delete();
-              if (courtNumber == 1) {
-                court1Reservations[hour] = {
-                  'isReserved': false,
-                  'userName': ''
-                };
-              } else if (courtNumber == 2) {
-                court2Reservations[hour] = {
-                  'isReserved': false,
-                  'userName': ''
-                };
+              DateTime now = DateTime.now();
+              DateTime reservationDateTime = DateTime(selectedDate.year,
+                  selectedDate.month, selectedDate.day, hour);
+
+              // Check if the reservation time is in the past or the current hour
+              if (!reservationDateTime.isBefore(now) &&
+                  !(reservationDateTime.hour == now.hour)) {
+                await firstDocument.reference.delete();
+                courtsReservations[courtNumber - 1]
+                    [hour] = {'isReserved': false, 'userName': ''};
+              } else {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('שגיאה'),
+                      content: const Text('לא ניתן למחוק הזמנות שקרו בעבר'),
+                      actions: <Widget>[
+                        TextButton(
+                          child: const Text('אישור'),
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
               }
             } catch (e) {
               // Handle the error as needed
@@ -209,11 +214,11 @@ class CourtReservationsState extends State<CourtReservations> {
                 context: context,
                 builder: (BuildContext context) {
                   return AlertDialog(
-                    title: const Text('Reservation Error'),
+                    title: const Text('שגיאת הזמנה'),
                     content: Text("משתמש $name כבר מוזמן"),
                     actions: <Widget>[
                       TextButton(
-                        child: const Text('OK'),
+                        child: const Text('אישור'),
                         onPressed: () {
                           Navigator.of(context).pop(); // Close the dialog
                         },
@@ -269,7 +274,7 @@ class CourtReservationsState extends State<CourtReservations> {
         // Call _getReservations to refresh the screen with updated data
         // Schedule a delayed call to _getReservations after 500 milliseconds (adjust the delay as needed)
         Future.delayed(const Duration(milliseconds: 500), () {
-          _getReservationsForDate(formattedDate);
+          _getReservationsForDate(selectedDate);
         });
       } catch (e) {
         // Handle errors or show an error message
@@ -279,6 +284,9 @@ class CourtReservationsState extends State<CourtReservations> {
 
   String formatName(String fullName) {
     // Trim the fullName to remove leading/trailing whitespaces
+    if (fullName == "") {
+      return "";
+    }
     fullName = fullName.trim();
 
     List<String> names = fullName.split(' ');
@@ -297,105 +305,140 @@ class CourtReservationsState extends State<CourtReservations> {
     }
   }
 
+  Future<bool> _isHoliday(DateTime date) async {
+    final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+    final docSnapshot = await FirebaseFirestore.instance
+        .collection('holidays')
+        .doc(formattedDate)
+        .get();
+    return docSnapshot
+        .exists; // Returns true if a holiday document exists for the selected date
+  }
+
+  Future<int> _determineNumberOfCourts(DateTime date) async {
+    bool isHoliday = await _isHoliday(date);
+    int dayOfWeek = date.weekday;
+
+    if (dayOfWeek == DateTime.friday ||
+        dayOfWeek == DateTime.saturday ||
+        isHoliday) {
+      return 3; // 3 courts on weekends and holidays
+    } else {
+      return 2; // 2 courts on regular days
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchData(DateTime date) async {
+    int numberOfCourts = await _determineNumberOfCourts(date);
+    await _reservationsFuture; // This line is unnecessary if _getReservationsForDate() doesn't return a meaningful value.
+
+    if (_reservationsFuture == null) {
+      _reservationsFuture = _getReservationsForDate(date);
+    }
+    Map<String, dynamic>? reservationsData = await _reservationsFuture;
+
+    return {
+      'numberOfCourts': numberOfCourts,
+      'reservationsData': reservationsData,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-        future: _reservationsFuture,
-        builder: (BuildContext context, AsyncSnapshot<void> snapshot) {
-          // Check the state of the future
+    return FutureBuilder<Map<String, dynamic>>(
+        future: _fetchData(widget.selectedDate),
+        builder: (BuildContext context,
+            AsyncSnapshot<Map<String, dynamic>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // Data is still loading
-            return CircularProgressIndicator(); // Show a loader
+            return const CircularProgressIndicator();
           } else if (snapshot.hasError) {
-            // An error occurred
             return Text('Error: ${snapshot.error}');
           } else {
+            int numberOfCourts =
+                snapshot.data?['numberOfCourts'] ?? 2; // Default to 2 courts
             return Column(
               children: [
-                // Header
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Text('שעה'),
-                      Text('מגרש 1'),
-                      Text('מגרש 2'),
-                    ],
-                  ),
-                ),
-                // Reservations list
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: court1Reservations
-                        .length, // Assuming equal hours for both courts
-                    itemBuilder: (context, index) {
-                      int hour = court1Reservations.keys.elementAt(index);
-                      // Inside your ListView.builder itemBuilder
-                      bool isReservedCourt1 =
-                          court1Reservations[hour]!['isReserved'];
-                      bool isReservedCourt2 =
-                          court2Reservations[hour]!['isReserved'];
-                      String userNameCourt1 = isReservedCourt1
-                          ? formatName(court1Reservations[hour]!['userName'])
-                          : "";
-                      String partnerNameCourt1 = isReservedCourt1
-                          ? formatName(court1Reservations[hour]!['partner'])
-                          : "";
-                      String userNameCourt2 = isReservedCourt2
-                          ? formatName(court2Reservations[hour]!['userName'])
-                          : "";
-                      String partnerNameCourt2 = isReservedCourt2
-                          ? formatName(court2Reservations[hour]!['partner'])
-                          : "";
-                      bool isMine1 = userNameCourt1 == widget.myUserName ||
-                          partnerNameCourt1 == widget.myUserName;
-                      bool isMine2 = userNameCourt2 == widget.myUserName ||
-                          partnerNameCourt2 == widget.myUserName;
-
-                      String textCourt1 = isReservedCourt1
-                          ? "$userNameCourt1, $partnerNameCourt1"
-                          : "פנוי - הזמן";
-                      String textCourt2 = isReservedCourt2
-                          ? "$userNameCourt2, $partnerNameCourt2"
-                          : "פנוי - הזמן";
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Hour
-                          Text('$hour:00'),
-                          // Court 1 Button
-                          ElevatedButton(
-                            onPressed: () => _reserve(1, hour),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isMine1
-                                  ? Colors.blue
-                                  : isReservedCourt1
-                                      ? Colors.red
-                                      : Colors.green, // Updated parameter
-                            ),
-                            child: Text(textCourt1),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Container(
+                          // Adjust the width as needed to fit your content
+                          width: MediaQuery.of(context).size.width *
+                              (numberOfCourts /
+                                  2), // Example dynamic width based on number of courts
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    const Text('שעה'),
+                                    for (int i = 0; i < numberOfCourts; i++)
+                                      Text('מגרש ${i + 1}'),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: courtsReservations[0].length,
+                                  itemBuilder: (context, index) {
+                                    int hour = index + 7; // Starting from 7
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        Text('$hour:00'),
+                                        for (int i = 1;
+                                            i <= numberOfCourts;
+                                            i++)
+                                          buildCourtButton(i - 1, hour),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          // Court 2 Button
-                          ElevatedButton(
-                            onPressed: () => _reserve(2, hour),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isMine2
-                                  ? Colors.blue
-                                  : isReservedCourt2
-                                      ? Colors.red
-                                      : Colors.green, // Updated parameter
-                            ),
-                            child: Text(textCourt2),
-                          ),
-                        ],
-                      );
-                    },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             );
           }
         });
+  }
+
+  Widget buildCourtButton(int courtIndex, int hour) {
+    // Assuming courtsReservations is a list of maps, and you're accessing the 'isReserved', 'userName', and 'partner' keys
+    bool isReserved =
+        courtsReservations[courtIndex][hour]?['isReserved'] ?? false;
+    String userName =
+        formatName(courtsReservations[courtIndex][hour]?['userName'] ?? '');
+    String partnerName =
+        formatName(courtsReservations[courtIndex][hour]?['partner'] ?? '');
+
+    bool isMine =
+        userName == widget.myUserName || partnerName == widget.myUserName;
+
+    // Using null-aware operators for safety
+    return ElevatedButton(
+      onPressed: () => _reserve(
+          courtIndex + 1, hour), // Assuming court numbering starts from 1
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isReserved
+            ? isMine
+                ? Colors.blue
+                : Colors.red
+            : Colors.green,
+      ),
+      child: Text(isReserved ? "$userName, $partnerName" : "פנוי - הזמן"),
+    );
   }
 }

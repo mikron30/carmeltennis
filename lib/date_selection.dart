@@ -18,7 +18,7 @@ class DateSelectorState extends State<DateSelector> {
     DateTime now = DateTime.now();
     DateTime today = DateTime(now.year, now.month, now.day);
     DateTime tomorrow =
-        DateTime(now.year, now.month, now.day).add(Duration(days: 1));
+        DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
 
     final DateTime? picked = await showDatePicker(
       context: context,

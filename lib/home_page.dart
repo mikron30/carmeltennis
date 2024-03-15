@@ -13,6 +13,7 @@ import 'court_reservation.dart';
 import 'date_selection.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
+import 'hoilday.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -243,31 +244,38 @@ class _HomepageState extends State<HomePage> {
             ),
         ],
       ),
+      // Assuming the use of a Stateful Widget and proper setup for AuthFunc and other used widgets
       endDrawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: Colors.blue,
               ),
               child: Text(
                   loggedIn
                       ? 'שלום ${FirebaseAuth.instance.currentUser?.displayName ?? "אורח"}'
                       : 'אורח',
-                  style: const TextStyle(color: Colors.white, fontSize: 24)),
+                  style: TextStyle(color: Colors.white, fontSize: 24)),
             ),
-            // Directly use AuthFunc here
             ListTile(
               title: AuthFunc(
                 loggedIn: loggedIn,
-                signOut: () {
-                  FirebaseAuth.instance.signOut();
+                signOut: () async {
+                  await FirebaseAuth.instance.signOut();
                   setState(() {});
-                  // Optionally, navigate to a different page after logging out
                   Navigator.of(context).pop(); // Close the drawer
+                  // Optionally, navigate to a different page after logging out
                 },
               ),
+            ),
+            ListTile(
+              title: Text('Add Holiday'),
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) => AddHolidayScreen()));
+              },
             ),
             // Additional drawer items...
           ],
