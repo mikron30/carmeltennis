@@ -88,16 +88,16 @@ class _HomepageState extends State<HomePage> {
       QuerySnapshot querySnapshot =
           await FirebaseFirestore.instance.collection('users_2024').get();
 
-      List<String> fetchedUsers = querySnapshot.docs
-          .map((doc) {
-            String firstName =
-                doc['שם פרטי']; // Assuming field names are exactly these
-            String lastName = doc['שם משפחה'];
-            return '$firstName $lastName'; // Concatenate to form a full name
-          })
-          .where((userName) =>
-              userName != myUserName) // Filter out the current user's name
-          .toList();
+      List<String> fetchedUsers = querySnapshot.docs.map((doc) {
+        String firstName =
+            doc['שם פרטי']; // Assuming field names are exactly these
+        String lastName = doc['שם משפחה'];
+        return '$firstName $lastName'; // Concatenate to form a full name
+      }).toList();
+      if (myUserName != "מועדון כרמל") {
+        fetchedUsers.removeWhere(
+            (userName) => userName == myUserName || userName == "מועדון כרמל");
+      }
 
       // Update suggestionsList with the fetched and processed users
       setState(() {
@@ -270,13 +270,14 @@ class _HomepageState extends State<HomePage> {
                 },
               ),
             ),
-            ListTile(
-              title: Text('Add Holiday'),
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => AddHolidayScreen()));
-              },
-            ),
+            if (myUserName == "מועדון כרמל")
+              ListTile(
+                title: Text('ניהול חגים'),
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => AddHolidayScreen()));
+                },
+              ),
             // Additional drawer items...
           ],
         ),

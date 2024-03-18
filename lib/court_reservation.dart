@@ -23,14 +23,11 @@ class CourtReservations extends StatefulWidget {
 class CourtReservationsState extends State<CourtReservations> {
   CourtReservationsState(); // Constructor to receive the selected date
   Future<Map<String, dynamic>>? _reservationsFuture;
-
+  int numberOfCourts = 2; // Default to 2 courts, will be updated in initState
   // Dynamic list to store reservations for each court
   List<Map<int, Map<String, dynamic>>> courtsReservations = [];
-  bool isWeekend(DateTime date) {
-    // In Dart, weekday 6 represents Friday and 7 represents Saturday
-    return date.weekday == DateTime.friday || date.weekday == DateTime.saturday;
-  } // Example: Initializing for 2 courts, you can adjust based on actual number
-
+  bool isHolidayEve = false;
+  bool isManager = false;
   void initReservations(int numberOfCourts) {
     courtsReservations = List.generate(
         numberOfCourts,
@@ -45,19 +42,46 @@ class CourtReservationsState extends State<CourtReservations> {
 
   @override
   void initState() {
-    DateTime selectedDate = widget.selectedDate;
-
-    initReservations(isWeekend(selectedDate) ? 3 : 2);
-    _getReservationsForDate(selectedDate);
     super.initState();
-    _fetchReservations();
+    isManager = widget.myUserName == "מועדון הכרמל";
+    checkIfHolidayEve(widget.selectedDate);
+    _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
+      numberOfCourts = courtCount;
+      initReservations(numberOfCourts);
+      _fetchReservations();
+    });
   }
 
   @override
   void didUpdateWidget(covariant CourtReservations oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedDate != oldWidget.selectedDate) {
-      _fetchReservations(); // Fetch reservations when the selected date changes
+      checkIfHolidayEve(widget.selectedDate);
+      _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
+        setState(() {
+          numberOfCourts = courtCount;
+          initReservations(numberOfCourts);
+          _fetchReservations();
+        });
+      });
+    }
+  }
+
+  Future<void> checkIfHolidayEve(DateTime date) async {
+    final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+    final docSnapshot = await FirebaseFirestore.instance
+        .collection('holidays')
+        .doc(formattedDate)
+        .get();
+
+    if (docSnapshot.exists && docSnapshot.data()?['isErev'] == true) {
+      setState(() {
+        isHolidayEve = true;
+      });
+    } else {
+      setState(() {
+        isHolidayEve = false;
+      });
     }
   }
 
@@ -74,7 +98,6 @@ class CourtReservationsState extends State<CourtReservations> {
       final User? user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
-        int numberOfCourts = isWeekend(selectedDate) ? 3 : 2;
         for (int i = 1; i <= numberOfCourts; i++) {
           reservationsData[i.toString()] =
               {}; // Use court number as a string key
@@ -150,18 +173,18 @@ class CourtReservationsState extends State<CourtReservations> {
 
         final existingReservationSnapshot =
             await existingReservationQuery.get();
+        DateTime now = DateTime.now();
+        DateTime reservationDateTime = DateTime(
+            selectedDate.year, selectedDate.month, selectedDate.day, hour);
         if (existingReservationSnapshot.docs.isNotEmpty) {
           // Assuming you have only one document with a matching username,
           // you can access the username from the first document.
           final firstDocument = existingReservationSnapshot.docs.first;
           final data = firstDocument.data();
           final storedUserName = data['userName'];
-          if (storedUserName == widget.myUserName) {
+          if (storedUserName == widget.myUserName ||
+              widget.myUserName == "מועדון כרמל") {
             try {
-              DateTime now = DateTime.now();
-              DateTime reservationDateTime = DateTime(selectedDate.year,
-                  selectedDate.month, selectedDate.day, hour);
-
               // Check if the reservation time is in the past or the current hour
               if (!reservationDateTime.isBefore(now) &&
                   !(reservationDateTime.hour == now.hour)) {
@@ -202,7 +225,8 @@ class CourtReservationsState extends State<CourtReservations> {
                 await reservationManager.hasExistingReservation(
                     widget.selectedPartner ?? '', selectedDate);
 
-            if (userHasReservation || partnerHasReservation) {
+            if (widget.myUserName != "מועדון כרמל" &&
+                (userHasReservation || partnerHasReservation)) {
               if (!mounted) {
                 return; // Add this check before showDialog or using context after async gap
               }
@@ -228,21 +252,41 @@ class CourtReservationsState extends State<CourtReservations> {
                 },
               );
             } else {
-              // Create the reservation data including the date
-              final reservationData = {
-                'date': formattedDate, // Add the date to the reservation data
-                'courtNumber': courtNumber,
-                'hour': hour,
-                'isReserved': true,
-                'userName': widget.myUserName,
-                'partner': widget.selectedPartner,
-              };
-              final reservationId = DateTime.now().toUtc().toIso8601String();
-              // Store the reservation in Firestore using the unique reservation ID
-              await FirebaseFirestore.instance
-                  .collection('reservations')
-                  .doc(reservationId)
-                  .set(reservationData);
+              if (reservationDateTime.isBefore(now)) {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('שגיאה'),
+                      content: const Text('לא ניתן להזמין בעבר'),
+                      actions: <Widget>[
+                        TextButton(
+                          child: const Text('אישור'),
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              } else {
+                // Create the reservation data including the date
+                final reservationData = {
+                  'date': formattedDate, // Add the date to the reservation data
+                  'courtNumber': courtNumber,
+                  'hour': hour,
+                  'isReserved': true,
+                  'userName': widget.myUserName,
+                  'partner': widget.selectedPartner,
+                };
+                final reservationId = DateTime.now().toUtc().toIso8601String();
+                // Store the reservation in Firestore using the unique reservation ID
+                await FirebaseFirestore.instance
+                    .collection('reservations')
+                    .doc(reservationId)
+                    .set(reservationData);
+              }
             }
           } else {
             // Within an async function
@@ -354,8 +398,6 @@ class CourtReservationsState extends State<CourtReservations> {
           } else if (snapshot.hasError) {
             return Text('Error: ${snapshot.error}');
           } else {
-            int numberOfCourts =
-                snapshot.data?['numberOfCourts'] ?? 2; // Default to 2 courts
             return Column(
               children: [
                 Expanded(
@@ -416,29 +458,62 @@ class CourtReservationsState extends State<CourtReservations> {
   }
 
   Widget buildCourtButton(int courtIndex, int hour) {
+    // Check if courtIndex is within the range of courtsReservations
+    if (courtIndex < 0 || courtIndex >= courtsReservations.length) {
+      // Handle the invalid courtIndex case (e.g., by returning a disabled button)
+      return ElevatedButton(
+        onPressed: null, // Disabled button
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.grey,
+        ),
+        child: const Text("Invalid"),
+      );
+    }
+
+    // Check if the hour is a valid key in the court's reservation map
+    if (!courtsReservations[courtIndex].containsKey(hour)) {
+      // Handle the invalid hour case (e.g., by returning a disabled button)
+      return ElevatedButton(
+        onPressed: null, // Disabled button
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.grey,
+        ),
+        child: const Text("Invalid Hour"),
+      );
+    }
+
     // Assuming courtsReservations is a list of maps, and you're accessing the 'isReserved', 'userName', and 'partner' keys
     bool isReserved =
         courtsReservations[courtIndex][hour]?['isReserved'] ?? false;
-    String userName =
-        formatName(courtsReservations[courtIndex][hour]?['userName'] ?? '');
-    String partnerName =
-        formatName(courtsReservations[courtIndex][hour]?['partner'] ?? '');
+    String? longUserName = courtsReservations[courtIndex][hour]?['userName'];
+    String userName = formatName(longUserName ?? '');
+    String? longPartnerName = courtsReservations[courtIndex][hour]?['partner'];
+    String partnerName = formatName(longPartnerName ?? '');
 
-    bool isMine =
-        userName == widget.myUserName || partnerName == widget.myUserName;
-
+    bool isMine = longUserName == widget.myUserName ||
+        longPartnerName == widget.myUserName;
     // Using null-aware operators for safety
-    return ElevatedButton(
-      onPressed: () => _reserve(
-          courtIndex + 1, hour), // Assuming court numbering starts from 1
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isReserved
-            ? isMine
-                ? Colors.blue
-                : Colors.red
-            : Colors.green,
-      ),
-      child: Text(isReserved ? "$userName, $partnerName" : "פנוי - הזמן"),
-    );
+    if ((widget.selectedDate.weekday == DateTime.friday || isHolidayEve) &&
+        (hour >= 7 && hour <= 18) &&
+        courtIndex == 2) {
+      return ElevatedButton(
+        onPressed: null, // Disable the button
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+        child: Text("מאמן"),
+      );
+    } else {
+      return ElevatedButton(
+        onPressed: () => _reserve(
+            courtIndex + 1, hour), // Assuming court numbering starts from 1
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isReserved
+              ? isMine
+                  ? Colors.blue
+                  : Colors.red
+              : Colors.green,
+        ),
+        child: Text(isReserved ? "$userName, $partnerName" : "פנוי - הזמן"),
+      );
+    }
   }
 }
