@@ -1,29 +1,40 @@
 // Copyright 2022 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-import 'package:firebase_ui_auth/firebase_ui_auth.dart'; // new
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'home_page.dart';
+import 'user_manager.dart';
+import 'change_password.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final appState = ApplicationState();
+  await appState.init();
 
   runApp(ChangeNotifierProvider(
     create: (context) => ApplicationState(),
-    builder: ((context, child) => const App()),
+    builder: ((context, child) => App()),
   ));
+}
+
+void navigateToChangePassword(BuildContext context) {
+  // Navigation logic to the Change Password screen
+  Navigator.pushNamed(context, '/change-password');
 }
 
 // Change MaterialApp to MaterialApp.router and add the routerConfig
 class App extends StatelessWidget {
-  const App({super.key});
+  App({super.key});
 
   @override
   Widget build(BuildContext context) {
+    UserManager.instance.fetchAndStoreUserMappings();
     return MaterialApp.router(
       title: 'מועדון הכרמל',
       theme: ThemeData(
@@ -37,7 +48,8 @@ class App extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
         useMaterial3: true,
       ),
-      routerConfig: _router, // new
+//      routerConfig: _router, // new
+      routerConfig: _router,
     );
   }
 }
@@ -73,6 +85,7 @@ final _router = GoRouter(
                     return;
                   }
                   if (state is UserCreated) {
+                    // Storing connection information
                     user.updateDisplayName(user.email!.split('@')[0]);
                   }
                   if (!user.emailVerified) {
@@ -112,6 +125,10 @@ final _router = GoRouter(
               ],
             );
           },
+        ),
+        GoRoute(
+          path: 'change-password',
+          builder: (context, state) => const ChangePasswordScreen(),
         ),
       ],
     ),
