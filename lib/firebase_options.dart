@@ -23,20 +23,11 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -50,21 +41,51 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBRFzwULCldAPvEoCl9Oe7pbSZ2P9VIUeo',
-    appId: '1:319754315071:web:7d6c51a4a185849651df8a',
-    messagingSenderId: '319754315071',
-    projectId: 'potent-howl-228108',
-    authDomain: 'potent-howl-228108.firebaseapp.com',
-    databaseURL: 'https://potent-howl-228108.firebaseio.com',
-    storageBucket: 'potent-howl-228108.appspot.com',
+    apiKey: 'AIzaSyAbAzSgmbgIGU-Ay5geELsgTaMD4n30kSo',
+    appId: '1:659194624554:web:cac1d33b4f4da7b4d56153',
+    messagingSenderId: '659194624554',
+    projectId: 'mit-app-inventor-bff1c',
+    authDomain: 'mit-app-inventor-bff1c.firebaseapp.com',
+    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
+    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAc5piNGQH5hOieyM8lKeF7-SaGi5-xKiw',
-    appId: '1:319754315071:android:f53c64c36690ebcf51df8a',
-    messagingSenderId: '319754315071',
-    projectId: 'potent-howl-228108',
-    databaseURL: 'https://potent-howl-228108.firebaseio.com',
-    storageBucket: 'potent-howl-228108.appspot.com',
+    apiKey: 'AIzaSyB3UOnYS71UxbuyjJmgi08rkxKamjH3kwE',
+    appId: '1:659194624554:android:2bab1368d4992ae0d56153',
+    messagingSenderId: '659194624554',
+    projectId: 'mit-app-inventor-bff1c',
+    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
+    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyByCIaA4n4JgmZDTCTvWU8FhKu6IokpmAw',
+    appId: '1:659194624554:ios:1220bef93b2cb0b1d56153',
+    messagingSenderId: '659194624554',
+    projectId: 'mit-app-inventor-bff1c',
+    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
+    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
+    iosBundleId: 'com.example.carmeltennis',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyByCIaA4n4JgmZDTCTvWU8FhKu6IokpmAw',
+    appId: '1:659194624554:ios:1dec519c33973029d56153',
+    messagingSenderId: '659194624554',
+    projectId: 'mit-app-inventor-bff1c',
+    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
+    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
+    iosBundleId: 'com.carmeltennisMain',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyAbAzSgmbgIGU-Ay5geELsgTaMD4n30kSo',
+    appId: '1:659194624554:web:e9bd938df437dad6d56153',
+    messagingSenderId: '659194624554',
+    projectId: 'mit-app-inventor-bff1c',
+    authDomain: 'mit-app-inventor-bff1c.firebaseapp.com',
+    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
+    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
   );
 }
