@@ -41,3 +41,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter related
+**/build/
+**/.dart_tool/
+**/flutter_export_environment.sh
+**/generated_plugin_registrant.dart
+
+# Android local properties
+**/local.properties
+
+# MacOS specific
+.DS_Store
+
+# Log files
+*.log
+
+# Firebase service account key
+potent-howl-228108-firebase-adminsdk-44p85-c5ad0e67dd.json
