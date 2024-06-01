@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="carmeltennis"
-        android:name="${applicationName}"
+        android:name=".FlutterMultiDexApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name="com.carmeltennis.activities.MainActivity"

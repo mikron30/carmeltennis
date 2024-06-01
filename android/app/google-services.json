@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "659194624554",
+    "firebase_url": "https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com",
+    "project_id": "mit-app-inventor-bff1c",
+    "storage_bucket": "mit-app-inventor-bff1c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659194624554:android:2bab1368d4992ae0d56153",
+        "android_client_info": {
+          "package_name": "com.carmeltennis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3UOnYS71UxbuyjJmgi08rkxKamjH3kwE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
