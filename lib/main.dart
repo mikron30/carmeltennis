@@ -1,7 +1,8 @@
 // Copyright 2022 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart'; // Import the generated options file
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -14,11 +15,18 @@ import 'change_password.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize your application state
   final appState = ApplicationState();
   await appState.init();
 
   runApp(ChangeNotifierProvider(
-    create: (context) => ApplicationState(),
+    create: (context) => appState,
     builder: ((context, child) => App()),
   ));
 }

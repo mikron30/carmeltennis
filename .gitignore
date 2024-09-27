@@ -44,6 +44,7 @@ app.*.map.json
 
 # Flutter related
 **/build/
+!/build/web
 **/.dart_tool/
 **/flutter_export_environment.sh
 **/generated_plugin_registrant.dart

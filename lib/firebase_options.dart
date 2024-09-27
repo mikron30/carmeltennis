@@ -40,15 +40,15 @@ class DefaultFirebaseOptions {
     }
   }
 
+// Your web app's Firebase configuration
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAbAzSgmbgIGU-Ay5geELsgTaMD4n30kSo',
-    appId: '1:659194624554:web:cac1d33b4f4da7b4d56153',
-    messagingSenderId: '659194624554',
-    projectId: 'mit-app-inventor-bff1c',
-    authDomain: 'mit-app-inventor-bff1c.firebaseapp.com',
-    databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
-    storageBucket: 'mit-app-inventor-bff1c.appspot.com',
-  );
+      apiKey: "AIzaSyBRFzwULCldAPvEoCl9Oe7pbSZ2P9VIUeo",
+      authDomain: "potent-howl-228108.firebaseapp.com",
+      databaseURL: "https://potent-howl-228108.firebaseio.com",
+      projectId: "potent-howl-228108",
+      storageBucket: "potent-howl-228108.appspot.com",
+      messagingSenderId: "319754315071",
+      appId: "1:319754315071:web:7d6c51a4a185849651df8a");
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB3UOnYS71UxbuyjJmgi08rkxKamjH3kwE',
@@ -71,7 +71,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyByCIaA4n4JgmZDTCTvWU8FhKu6IokpmAw',
-    appId: '1:659194624554:ios:1dec519c33973029d56153',
+    appId: '1:319754315071:ios:81a28232c3ae39a951df8a',
     messagingSenderId: '659194624554',
     projectId: 'mit-app-inventor-bff1c',
     databaseURL: 'https://mit-app-inventor-bff1c-default-rtdb.firebaseio.com',
