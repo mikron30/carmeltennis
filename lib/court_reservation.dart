@@ -29,14 +29,20 @@ class CourtReservationsState extends State<CourtReservations> {
   bool isHolidayEve = false;
   bool isManager = false;
   void initReservations(int numberOfCourts) {
+    // Clear the existing reservations to avoid conflicts
+    courtsReservations.clear();
+    // Initialize the reservation structure for each court
     courtsReservations = List.generate(
         numberOfCourts,
         (index) => {
-              for (var i = 7; i <= 21; i++)
+              for (var i = 7;
+                  i <= 21;
+                  i++) // Reserve slots between 7:00 and 21:00
                 i: {'isReserved': false, 'userName': '', 'partner': ''}
             });
+    // Ensure the UI is updated after initializing reservations
     if (mounted) {
-      setState(() {}); // Ensure UI is updated to reflect the reset state
+      setState(() {}); // Ensure a UI update after reservation changes
     }
   }
 
@@ -46,9 +52,11 @@ class CourtReservationsState extends State<CourtReservations> {
     isManager = widget.myUserName == "מועדון הכרמל";
     checkIfHolidayEve(widget.selectedDate);
     _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
-      numberOfCourts = courtCount;
-      initReservations(numberOfCourts);
-      _fetchReservations();
+      setState(() {
+        numberOfCourts = courtCount;
+        initReservations(numberOfCourts);
+        _fetchReservations();
+      });
     });
   }
 
@@ -102,14 +110,12 @@ class CourtReservationsState extends State<CourtReservations> {
         "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
     try {
       final User? user = FirebaseAuth.instance.currentUser;
-
       if (user != null) {
         for (int i = 1; i <= numberOfCourts; i++) {
           reservationsData[i.toString()] =
               {}; // Use court number as a string key
         }
         initReservations(numberOfCourts);
-
         final query = FirebaseFirestore.instance
             .collection('reservations')
             .where('date', isEqualTo: formattedDate);
@@ -121,6 +127,7 @@ class CourtReservationsState extends State<CourtReservations> {
           final List<Reservation> reservations = [];
           for (final doc in querySnapshot.docs) {
             final data = doc.data() as Map<String, dynamic>;
+
             final reservation = Reservation(
               // Create a Reservation object or a data structure to hold the reservation data
               // You may need to define the Reservation class accordingly
@@ -374,7 +381,6 @@ class CourtReservationsState extends State<CourtReservations> {
   Future<int> _determineNumberOfCourts(DateTime date) async {
     bool isHoliday = await _isHoliday(date);
     int dayOfWeek = date.weekday;
-
     if (dayOfWeek == DateTime.friday ||
         dayOfWeek == DateTime.saturday ||
         isHoliday) {
@@ -402,71 +408,75 @@ class CourtReservationsState extends State<CourtReservations> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
-        future: _fetchData(widget.selectedDate),
-        builder: (BuildContext context,
-            AsyncSnapshot<Map<String, dynamic>> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
-          } else if (snapshot.hasError) {
-            return Text('Error: ${snapshot.error}');
-          } else {
-            return Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+      future: _fetchData(widget.selectedDate),
+      builder:
+          (BuildContext context, AsyncSnapshot<Map<String, dynamic>> snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const CircularProgressIndicator();
+        } else if (snapshot.hasError) {
+          return Text('Error: ${snapshot.error}');
+        } else {
+          // Debugging the number of courts
+
+          return Column(
+            children: [
+              // Header Row for Time and Courts
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Time Column
+                    Expanded(
+                      child: Center(
+                        child: const Text('שעה'),
+                      ),
+                    ),
+                    // Court Columns
+                    for (int i = 0; i < numberOfCourts; i++)
+                      Expanded(
+                        child: Center(
+                          child: Text('מגרש ${i + 1}'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Body with Reservation Data
+              Expanded(
+                child: ListView.builder(
+                  itemCount: courtsReservations.isNotEmpty
+                      ? courtsReservations[0].length
+                      : 0, // Ensure the length is correct
+                  itemBuilder: (context, index) {
+                    int hour = index + 7; // Starting from 7
+
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        Container(
-                          // Adjust the width as needed to fit your content
-                          width: MediaQuery.of(context).size.width *
-                              (numberOfCourts /
-                                  2), // Example dynamic width based on number of courts
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    const Text('שעה'),
-                                    for (int i = 0; i < numberOfCourts; i++)
-                                      Text('מגרש ${i + 1}'),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: courtsReservations[0].length,
-                                  itemBuilder: (context, index) {
-                                    int hour = index + 7; // Starting from 7
-                                    return Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        Text('$hour:00'),
-                                        for (int i = 1;
-                                            i <= numberOfCourts;
-                                            i++)
-                                          buildCourtButton(i - 1, hour),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
+                        // Time Column for Each Row
+                        Expanded(
+                          child: Center(
+                            child: Text('$hour:00'),
                           ),
                         ),
+                        // Loop through each court and build button for each court in the row
+                        for (int i = 0; i < numberOfCourts; i++)
+                          Expanded(
+                            child: Center(
+                              child: buildCourtButton(i, hour),
+                            ),
+                          ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              ],
-            );
-          }
-        });
+              ),
+            ],
+          );
+        }
+      },
+    );
   }
 
   Widget buildCourtButton(int courtIndex, int hour) {

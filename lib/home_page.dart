@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart'; // Import GoRouter
 
 import 'app_state.dart';
 import 'court_reservation.dart';
@@ -14,6 +15,8 @@ import 'date_selection.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
 import 'hoilday.dart';
+import 'package:intl/intl.dart'; // Import the intl package for date formatting
+import 'users_management.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,49 +35,29 @@ class _HomepageState extends State<HomePage> {
       []; // This should be fetched from SharedPreferences or similar
   String? myUserName;
 
-  void _showInvalidDateMessage(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Invalid Date'),
-        content: const Text('ניתן להזמין רק להיום ולמחר'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('אישור'),
-          ),
-        ],
-      ),
-    );
-  }
+  bool isTodaySelected = true; // Default to "Today" being selected
+  bool isTomorrowSelected = false; // Initially, tomorrow is not selected
 
-  // Callback function to update the selected date
   void updateSelectedDate(BuildContext context, DateTime newDate) {
-    DateTime now = DateTime.now();
-    DateTime today = DateTime(now.year, now.month, now.day);
-    DateTime tomorrow = DateTime(now.year, now.month, now.day + 1);
+    // Normalize both dates to midnight (00:00:00) for comparison
+    DateTime today = DateTime.now();
+    DateTime normalizedToday = DateTime(today.year, today.month, today.day);
+    DateTime normalizedNewDate =
+        DateTime(newDate.year, newDate.month, newDate.day);
 
-    if (newDate.isAtSameMomentAs(today) || newDate.isAtSameMomentAs(tomorrow)) {
-      setState(() {
-        selectedDate = newDate;
-      });
-    } else {
-      setState(() {
-        selectedDate = today;
-      });
-      _showInvalidDateMessage(context);
-    }
-  }
+    setState(() {
+      selectedDate = newDate;
 
-  void fetchMyUserName() async {
-    try {
-      String? userEmail =
-          FirebaseAuth.instance.currentUser?.email; // Now assigns user's email
-      myUserName =
-          await UserManager.instance.getUsernameByEmail(userEmail ?? '');
-    } catch (e) {
-      // Handle the error accordingly
-    }
+      if (normalizedNewDate.isAtSameMomentAs(normalizedToday)) {
+        // "Today" selected
+        isTodaySelected = true;
+        isTomorrowSelected = false;
+      } else {
+        // "Tomorrow" selected
+        isTodaySelected = false;
+        isTomorrowSelected = true;
+      }
+    });
   }
 
   void fetchAllUsers() async {
@@ -89,23 +72,35 @@ class _HomepageState extends State<HomePage> {
           await FirebaseFirestore.instance.collection('users_2024').get();
 
       List<String> fetchedUsers = querySnapshot.docs.map((doc) {
-        String firstName =
-            doc['שם פרטי']; // Assuming field names are exactly these
+        String firstName = doc['שם פרטי'];
         String lastName = doc['שם משפחה'];
-        return '$firstName $lastName'; // Concatenate to form a full name
+        return '$firstName $lastName'.trim(); // Ensure no extra spaces
       }).toList();
+
+      // If the user is not "מועדון כרמל", remove them from the list of partners
       if (myUserName != "מועדון כרמל") {
-        fetchedUsers.removeWhere(
-            (userName) => userName == myUserName || userName == "מועדון כרמל");
+        fetchedUsers.removeWhere((userName) =>
+            userName.trim().toLowerCase() == myUserName?.trim().toLowerCase() ||
+            userName == "מועדון כרמל");
       }
 
-      // Update suggestionsList with the fetched and processed users
+      // Update the suggestions list with the filtered users
       setState(() {
         suggestionsList = fetchedUsers;
       });
     } catch (e) {
       // Handle the error accordingly
+      print("Error fetching users: $e");
     }
+  }
+
+  Future<void> fetchMyUserName() async {
+    try {
+      String? userEmail = FirebaseAuth.instance.currentUser?.email;
+      if (userEmail != null) {
+        myUserName = await UserManager.instance.getUsernameByEmail(userEmail);
+      }
+    } catch (e) {}
   }
 
   @override
@@ -114,174 +109,302 @@ class _HomepageState extends State<HomePage> {
     selectedDate = DateTime.now();
     final User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // User is logged in
-      fetchAllUsers();
+      fetchAllUsers(); // Ensure this is being calle
+      // Fetch the user name before building the UI
+      fetchMyUserName().then((_) {
+        setState(() {
+          // Rebuild the UI after the username is fetched
+        });
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
-    final bool loggedIn = FirebaseAuth.instance.currentUser != null;
+    final bool loggedIn = user != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(''), // Keep empty or use a different title
-        centerTitle: true,
-        leading: Builder(
-          builder: (BuildContext context) {
-            return IconButton(
-              icon: const Icon(Icons.menu), // Hamburger icon for the drawer
-              onPressed: () {
-                Scaffold.of(context).openEndDrawer(); // Open the drawer
-              },
-              tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
-            );
-          },
-        ),
-      ),
-      body: Column(
-        children: <Widget>[
-          // Expanded Row to contain DateSelector, AuthFunc, and Autocomplete
-          Expanded(
-            flex:
-                0, // Set flex to 0 to prevent the row from expanding vertically
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (user != null) // User is logged in
-                  Flexible(
-                    child: DateSelector(
-                      onDateSelected: (DateTime date) {
-                        updateSelectedDate(context, date);
-                      },
-                    ),
-                  ),
-                Flexible(
-                  child: Autocomplete<String>(
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return const Iterable<String>.empty();
-                      }
-                      return suggestionsList.where((String option) {
-                        return option
-                            .toLowerCase()
-                            .contains(textEditingValue.text.toLowerCase());
-                      });
+      // No AppBar as per your previous request
+      body: loggedIn
+          ? _buildMainContent() // Show main content if logged in
+          : _buildLoginScreen(), // Show login prompt if not logged in
+
+      // Show drawer only if logged in
+      drawer: loggedIn ? _buildDrawer() : null,
+    );
+  }
+
+// Function to build the main content (when user is logged in)
+  Widget _buildMainContent() {
+    // Get today's and tomorrow's dates in dd/MM/yyyy format
+    DateTime today = DateTime.now();
+    DateTime tomorrow = today.add(const Duration(days: 1));
+    String formattedToday = DateFormat('dd/MM/yyyy').format(today);
+    String formattedTomorrow = DateFormat('dd/MM/yyyy').format(tomorrow);
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.all(8.0), // Add some padding
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Use a Builder to get the correct context for opening the drawer
+              Builder(
+                builder: (BuildContext context) {
+                  return IconButton(
+                    icon: const Icon(Icons.menu),
+                    onPressed: () {
+                      // Open the drawer
+                      Scaffold.of(context).openDrawer();
                     },
-                    onSelected: (String selection) {
-                      setState(() {
-                        selectedPartner =
-                            selection; // Update selectedPartner with the selected name
-                      });
-                      // Update last selected users list here
-                    },
-                    fieldViewBuilder: (
-                      BuildContext context,
-                      TextEditingController fieldTextEditingController,
-                      FocusNode fieldFocusNode,
-                      VoidCallback onFieldSubmitted,
-                    ) {
-                      return TextField(
-                        controller: fieldTextEditingController,
-                        focusNode: fieldFocusNode,
-                        decoration: InputDecoration(
-                          hintText: "הכנס שם שותף", // Placeholder text
-                          // Additional decoration to match your app's style
-                        ),
-                        // Add any additional styling or functionality to the TextField here
-                      );
-                    },
-                    optionsViewBuilder: (
-                      BuildContext context,
-                      AutocompleteOnSelected<String> onSelected,
-                      Iterable<String> options,
-                    ) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          child: Container(
-                            width: 300, // Adjust the width as needed
-                            height: 200, // Adjust the height as needed
-                            child: ListView.builder(
-                              padding: EdgeInsets.all(10.0),
-                              itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final String option = options.elementAt(index);
-                                return GestureDetector(
-                                  onTap: () {
-                                    onSelected(option);
-                                  },
-                                  child: ListTile(
-                                    title: Text(option),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // CourtReservations widget
-          if (user != null) // User is logged in
-            Expanded(
-              child: Consumer<ApplicationState>(
-                builder: (context, appState, _) {
-                  fetchMyUserName();
-                  return CourtReservations(
-                    selectedDate: selectedDate ?? DateTime.now(),
-                    selectedPartner: selectedPartner ?? '',
-                    myUserName: myUserName,
                   );
                 },
               ),
-            ),
+              const SizedBox(width: 8),
+              // Conditional display based on the username
+              if (myUserName == "מועדון כרמל") ...[
+                // Show full date selector for "מועדון כרמל"
+                Flexible(
+                  flex: 1,
+                  child: DateSelector(
+                    onDateSelected: (DateTime date) {
+                      updateSelectedDate(context, date);
+                    },
+                  ),
+                ),
+              ] else ...[
+                Flexible(
+                  flex: 1,
+                  child: Row(
+                    children: [
+                      // Button for "היום" (Today)
+                      Flexible(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            updateSelectedDate(context, today);
+                          },
+                          child: Text(
+                            formattedToday,
+                            style: TextStyle(
+                              fontWeight: isTodaySelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Button for "מחר" (Tomorrow)
+                      Flexible(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            updateSelectedDate(context, tomorrow);
+                          },
+                          child: Text(
+                            formattedTomorrow,
+                            style: TextStyle(
+                              fontWeight: isTomorrowSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(width: 8),
+
+              // Partner selection Autocomplete widget
+              Expanded(
+                flex: 1,
+                child: Autocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return const Iterable<String>.empty();
+                    }
+                    return suggestionsList.where((String option) {
+                      return option
+                          .toLowerCase()
+                          .contains(textEditingValue.text.toLowerCase());
+                    });
+                  },
+                  onSelected: (String selection) {
+                    setState(() {
+                      selectedPartner = selection;
+                    });
+                  },
+                  fieldViewBuilder: (BuildContext context,
+                      TextEditingController fieldTextEditingController,
+                      FocusNode fieldFocusNode,
+                      VoidCallback onFieldSubmitted) {
+                    return TextField(
+                      controller: fieldTextEditingController,
+                      focusNode: fieldFocusNode,
+                      decoration: InputDecoration(
+                        hintText: "הכנס שם שותף",
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (BuildContext context,
+                      AutocompleteOnSelected<String> onSelected,
+                      Iterable<String> options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        child: Container(
+                          width: 300,
+                          height: 200,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(10.0),
+                            itemCount: options.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final String option = options.elementAt(index);
+                              return GestureDetector(
+                                onTap: () {
+                                  onSelected(option);
+                                },
+                                child: ListTile(
+                                  title: Text(option),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Consumer<ApplicationState>(
+            builder: (context, appState, _) {
+              fetchMyUserName();
+              return CourtReservations(
+                selectedDate: selectedDate ?? DateTime.now(),
+                selectedPartner: selectedPartner ?? '',
+                myUserName: myUserName,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+// Function to show the login screen if not logged in
+  Widget _buildLoginScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'Please log in to continue',
+            style: TextStyle(fontSize: 20),
+          ),
+          const SizedBox(height: 20),
+          AuthFunc(
+            // Use the AuthFunc widget for login handling
+            loggedIn: false,
+            signOut: () async {
+              await FirebaseAuth.instance.signOut();
+              setState(() {}); // Rebuild after logout
+            },
+          ),
         ],
       ),
-      // Assuming the use of a Stateful Widget and proper setup for AuthFunc and other used widgets
-      endDrawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
-              child: Text(
-                  loggedIn
-                      ? 'שלום ${FirebaseAuth.instance.currentUser?.displayName ?? "אורח"}'
-                      : 'אורח',
-                  style: TextStyle(color: Colors.white, fontSize: 24)),
-            ),
-            ListTile(
-              title: AuthFunc(
-                loggedIn: loggedIn,
-                signOut: () async {
-                  await FirebaseAuth.instance.signOut();
-                  setState(() {});
-                  Navigator.of(context).pop(); // Close the drawer
-                  // Optionally, navigate to a different page after logging out
-                },
-              ),
-            ),
-            if (myUserName == "מועדון כרמל")
-              ListTile(
-                title: const Text('ניהול חגים'),
-                onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) => AddHolidayScreen()));
-                },
-              ),
-            // Additional drawer items...
-          ],
+    );
+  }
+
+// Function to build the drawer (if logged in)
+  Widget _buildDrawer() {
+    return Drawer(
+        child: ListView(padding: EdgeInsets.zero, children: [
+      // Removed the DrawerHeader with "שלום ..."
+
+      // Auth function for signing out
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.blue),
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.blue[50],
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: ListTile(
+          leading: const Icon(Icons.exit_to_app, color: Colors.blue),
+          title: const Text('התנתק', style: TextStyle(color: Colors.blue)),
+          onTap: () async {
+            await FirebaseAuth.instance.signOut();
+            setState(() {});
+            Navigator.of(context).pop();
+          },
         ),
       ),
-    );
+
+      // Container for "שנה סיסמא" (Change Password)
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.blue),
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.blue[50],
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: ListTile(
+          leading: const Icon(Icons.lock, color: Colors.blue),
+          title: const Text('שנה סיסמא', style: TextStyle(color: Colors.blue)),
+          onTap: () {
+            GoRouter.of(context).push('/change-password');
+          },
+        ),
+      ),
+
+      if (myUserName == "מועדון כרמל")
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.blue),
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.blue[50],
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: ListTile(
+            leading: const Icon(Icons.lock, color: Colors.blue),
+            title:
+                const Text('ניהול חגים', style: TextStyle(color: Colors.blue)),
+            onTap: () {
+              Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => AddHolidayScreen()));
+            },
+          ),
+        ),
+      // New "Manage Users" option
+      if (myUserName == "מועדון כרמל")
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.blue),
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.blue[50],
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: ListTile(
+            leading: const Icon(Icons.group,
+                color: Colors.blue), // Choose a suitable icon
+            title: const Text('ניהול משתמשים',
+                style:
+                    TextStyle(color: Colors.blue)), // 'Manage Users' in Hebrew
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => ManageUsersScreen()),
+              );
+            },
+          ),
+        ),
+    ]));
   }
 }

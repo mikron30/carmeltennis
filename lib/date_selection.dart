@@ -15,16 +15,12 @@ class DateSelectorState extends State<DateSelector> {
   DateTime selectedDate = DateTime.now();
 
   Future<void> _selectDate(BuildContext context) async {
-    DateTime now = DateTime.now();
-    DateTime today = DateTime(now.year, now.month, now.day);
-    DateTime tomorrow =
-        DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: today, // Set initial date to today
-      firstDate: today, // Only allow today as the earliest selectable date
-      lastDate: tomorrow, // Only allow tomorrow as the latest selectable date
+      initialDate:
+          selectedDate, // Set the initial date to the currently selected date or today
+      firstDate: DateTime(2000), // Allow any date from the year 2000
+      lastDate: DateTime(2100), // Allow any date up to the year 2100
     );
 
     if (picked != null && picked != selectedDate) {

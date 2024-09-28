@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -11,6 +11,7 @@ class ChangePasswordScreen extends StatefulWidget {
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _passwordController = TextEditingController();
+  final _currentPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   Future<void> _changePassword() async {
@@ -20,25 +21,47 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         User? user = FirebaseAuth.instance.currentUser;
         String newPassword = _passwordController.text;
 
+        // Re-authenticate the user before updating the password
+        await _reAuthenticateUser();
+
         // Update the password
         await user!.updatePassword(newPassword);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Password changed successfully')),
         );
-        // Update the user's isFirstLogin status in Firestore
+
+        // Optionally update Firestore after the password change
         await FirebaseFirestore.instance
             .collection('users_2024')
             .doc(user.uid)
             .update({
           'isFirstLogin': false,
         });
+
         Navigator.of(context).pushReplacementNamed('/home');
-        // Optional: Log the user out or navigate away
       } catch (error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error changing password: $error')),
         );
       }
+    }
+  }
+
+  // Re-authenticate the user with their current credentials
+  Future<void> _reAuthenticateUser() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+
+      // Re-authenticate with email and password (prompt the user for current password)
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: user!.email!,
+        password: _currentPasswordController.text, // Get current password
+      );
+
+      // Re-authenticate the user
+      await user.reauthenticateWithCredential(credential);
+    } catch (e) {
+      throw Exception("Re-authentication failed: $e");
     }
   }
 
@@ -53,6 +76,19 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: Column(
             children: [
               TextFormField(
+                controller: _currentPasswordController,
+                decoration:
+                    const InputDecoration(labelText: 'Current Password'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your current password';
+                  }
+                  return null;
+                },
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'New Password'),
                 validator: (value) {
@@ -63,6 +99,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 },
                 obscureText: true,
               ),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _changePassword,
                 child: const Text('Change Password'),

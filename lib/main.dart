@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart'; // Import the generated options file
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
@@ -73,6 +74,9 @@ final _router = GoRouter(
           path: 'sign-in',
           builder: (context, state) {
             return SignInScreen(
+              providers: [
+                EmailAuthProvider(), // Include additional providers as needed
+              ],
               actions: [
                 ForgotPasswordAction(((context, email) {
                   final uri = Uri(
@@ -83,29 +87,32 @@ final _router = GoRouter(
                   );
                   context.push(uri.toString());
                 })),
-                AuthStateChangeAction(((context, state) {
+                AuthStateChangeAction(((context, state) async {
                   final user = switch (state) {
                     SignedIn state => state.user,
                     UserCreated state => state.credential.user,
                     _ => null
                   };
+
                   if (user == null) {
                     return;
                   }
+
+                  // If the user is newly created, set their display name
                   if (state is UserCreated) {
-                    // Storing connection information
                     user.updateDisplayName(user.email!.split('@')[0]);
                   }
-                  if (!user.emailVerified) {
-                    user.sendEmailVerification();
-                    const snackBar = SnackBar(
-                        content: Text(
-                            'Please check your email to verify your email address'));
-                    ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                  }
+
+                  // After login, just navigate to home
                   context.pushReplacement('/');
                 })),
               ],
+              footerBuilder: (context, _) {
+                return const SizedBox
+                    .shrink(); // This hides the registration footer
+              },
+              showAuthActionSwitch:
+                  false, // Hide switch between sign-in and register
             );
           },
           routes: [
