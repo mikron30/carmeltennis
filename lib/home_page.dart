@@ -140,8 +140,8 @@ class _HomepageState extends State<HomePage> {
     // Get today's and tomorrow's dates in dd/MM/yyyy format
     DateTime today = DateTime.now();
     DateTime tomorrow = today.add(const Duration(days: 1));
-    String formattedToday = DateFormat('dd/MM/yyyy').format(today);
-    String formattedTomorrow = DateFormat('dd/MM/yyyy').format(tomorrow);
+    String formattedToday = DateFormat('dd').format(today);
+    String formattedTomorrow = DateFormat('dd').format(tomorrow);
     return Column(
       children: <Widget>[
         Padding(

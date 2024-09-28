@@ -49,7 +49,7 @@ class CourtReservationsState extends State<CourtReservations> {
   @override
   void initState() {
     super.initState();
-    isManager = widget.myUserName == "מועדון הכרמל";
+    isManager = widget.myUserName == "מועדון כרמל";
     checkIfHolidayEve(widget.selectedDate);
     _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
       setState(() {
@@ -290,8 +290,8 @@ class CourtReservationsState extends State<CourtReservations> {
                   'courtNumber': courtNumber,
                   'hour': hour,
                   'isReserved': true,
-                  'userName': widget.myUserName,
-                  'partner': widget.selectedPartner,
+                  'userName': widget.myUserName!.trim(),
+                  'partner': widget.selectedPartner!.trim(),
                 };
                 final reservationId = DateTime.now().toUtc().toIso8601String();
                 // Store the reservation in Firestore using the unique reservation ID

@@ -20,7 +20,7 @@ class UserManager {
         String email = doc.data()['מייל'] as String;
         String firstName = doc.data()['שם פרטי'] as String;
         String lastName = doc.data()['שם משפחה'] as String;
-        tempMap[email] = '$firstName $lastName';
+        tempMap[email] = '$firstName $lastName'.trim();
       }
       _emailToUsernameMap = tempMap;
     } catch (e) {
