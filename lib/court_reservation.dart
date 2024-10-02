@@ -168,6 +168,34 @@ class CourtReservationsState extends State<CourtReservations> {
     return reservationsData; // Return the populated map
   }
 
+  Future<bool> _showDeleteConfirmationDialog(BuildContext context) async {
+    return await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('אישור מחיקה'),
+              content: const Text('האם אתה בטוח שברצונך למחוק את ההזמנה?'),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('ביטול'),
+                  onPressed: () {
+                    Navigator.of(context)
+                        .pop(false); // Return false if canceled
+                  },
+                ),
+                TextButton(
+                  child: const Text('אישור'),
+                  onPressed: () {
+                    Navigator.of(context).pop(true); // Return true if confirmed
+                  },
+                ),
+              ],
+            );
+          },
+        ) ??
+        false; // Return false if dialog is dismissed
+  }
+
   void _reserve(int courtNumber, int hour) async {
     final User? user = FirebaseAuth.instance.currentUser;
     DateTime selectedDate = widget.selectedDate;
@@ -198,12 +226,17 @@ class CourtReservationsState extends State<CourtReservations> {
           if (storedUserName == widget.myUserName ||
               widget.myUserName == "מועדון כרמל") {
             try {
-              // Check if the reservation time is in the past or the current hour
-              if (!reservationDateTime.isBefore(now) &&
-                  !(reservationDateTime.hour == now.hour)) {
-                await firstDocument.reference.delete();
-                courtsReservations[courtNumber - 1]
-                    [hour] = {'isReserved': false, 'userName': ''};
+              if (widget.myUserName == "מועדון כרמל" ||
+                  (!reservationDateTime.isBefore(now) &&
+                      !(reservationDateTime.hour == now.hour))) {
+                bool confirmDelete =
+                    await _showDeleteConfirmationDialog(context);
+                if (confirmDelete) {
+                  // Check if the reservation time is in the past or the current hour
+                  await firstDocument.reference.delete();
+                  courtsReservations[courtNumber - 1]
+                      [hour] = {'isReserved': false, 'userName': ''};
+                }
               } else {
                 showDialog(
                   context: context,
