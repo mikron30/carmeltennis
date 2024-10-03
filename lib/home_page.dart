@@ -158,6 +158,7 @@ class _HomepageState extends State<HomePage> {
                       // Open the drawer
                       Scaffold.of(context).openDrawer();
                     },
+                    color: myUserName == "מועדון טניס" ? Colors.red : null,
                   );
                 },
               ),
