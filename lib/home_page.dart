@@ -253,8 +253,8 @@ class _HomepageState extends State<HomePage> {
               ],
               const SizedBox(width: 8),
 // Combined Partner Selection: Single Text Box (Autocomplete + Dropdown)
-              Expanded(
-                flex: 3,
+              Flexible(
+                flex: 1,
                 child: Stack(
                   alignment: Alignment.centerRight,
                   children: [
