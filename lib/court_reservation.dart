@@ -196,6 +196,48 @@ class CourtReservationsState extends State<CourtReservations> {
         false; // Return false if dialog is dismissed
   }
 
+  Future<void> updateLastFivePartners(
+      String userEmail, String newPartner) async {
+    // Query the users_2024 collection where the מייל field matches the userEmail
+    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+        .collection('users_2024')
+        .where('מייל', isEqualTo: userEmail)
+        .get();
+
+    // If a document is found, proceed with updating the lastFivePartners field
+    if (querySnapshot.docs.isNotEmpty) {
+      DocumentReference userDoc = querySnapshot.docs.first.reference;
+      DocumentSnapshot userSnapshot = await userDoc.get();
+
+      List<String> lastFivePartners = [];
+
+      if (userSnapshot.exists) {
+        // Use try-catch block to handle potential errors if lastFivePartners does not exist
+        try {
+          lastFivePartners =
+              List<String>.from(userSnapshot['lastFivePartners'] ?? []);
+        } catch (e) {
+          // If lastFivePartners does not exist, initialize it as an empty list
+          lastFivePartners = [];
+        }
+      }
+
+      // Add the new partner to the list and ensure only 5 are kept
+      if (!lastFivePartners.contains(newPartner)) {
+        lastFivePartners.add(newPartner);
+        if (lastFivePartners.length > 5) {
+          lastFivePartners.removeAt(0); // Keep only the last 5
+        }
+      }
+
+      // Update Firestore with the updated lastFivePartners list
+      await userDoc.update({'lastFivePartners': lastFivePartners});
+    } else {
+      // Handle case where the user document is not found (if needed)
+      print("User document not found for email: $userEmail");
+    }
+  }
+
   void _reserve(int courtNumber, int hour) async {
     final User? user = FirebaseAuth.instance.currentUser;
     DateTime selectedDate = widget.selectedDate;
@@ -334,6 +376,10 @@ class CourtReservationsState extends State<CourtReservations> {
                     .collection('reservations')
                     .doc(reservationId)
                     .set(reservationData);
+
+                // Update the last 5 partners after the reservation is saved
+                await updateLastFivePartners(
+                    user.email!, widget.selectedPartner!.trim());
               }
             }
           } else {

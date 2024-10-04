@@ -29,9 +29,10 @@ class _HomepageState extends State<HomePage> {
   DateTime? selectedDate;
   String? selectedPartner;
   List<String> suggestionsList = []; // Assuming this is populated elsewhere
-
+  TextEditingController _partnerController =
+      TextEditingController(); // Add controller
   List<String> allUsers = []; // This should be fetched from your backend
-  List<String> lastSelectedUsers =
+  List<String> lastSelectedPartners =
       []; // This should be fetched from SharedPreferences or similar
   String? myUserName;
 
@@ -94,6 +95,31 @@ class _HomepageState extends State<HomePage> {
     }
   }
 
+  Future<List<String>> fetchLastFivePartners(String userEmail) async {
+    // Query the users_2024 collection for the document with the matching 'מייל' field
+    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+        .collection('users_2024')
+        .where('מייל', isEqualTo: userEmail) // Query by the 'מייל' field
+        .get();
+
+    // If the document exists, fetch the 'lastFivePartners' field
+    if (querySnapshot.docs.isNotEmpty) {
+      DocumentSnapshot userDoc = querySnapshot.docs.first;
+      if (userDoc.exists && userDoc.data() != null) {
+        try {
+          Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
+          // Return the list of last 5 partners or an empty list if not found
+          return List<String>.from(data['lastFivePartners'] ?? []);
+        } catch (e) {
+          // Return an empty list if 'lastFivePartners' field does not exist
+          return [];
+        }
+      }
+    }
+
+    return [];
+  }
+
   Future<void> fetchMyUserName() async {
     try {
       String? userEmail = FirebaseAuth.instance.currentUser?.email;
@@ -108,6 +134,14 @@ class _HomepageState extends State<HomePage> {
     super.initState();
     selectedDate = DateTime.now();
     final User? user = FirebaseAuth.instance.currentUser;
+    // Fetch last 5 reserved partners when the widget is initialized
+    if (user != null) {
+      fetchLastFivePartners(user.email!).then((partners) {
+        setState(() {
+          lastSelectedPartners = partners; // Store the fetched partners
+        });
+      });
+    }
     if (user != null) {
       fetchAllUsers(); // Ensure this is being calle
       // Fetch the user name before building the UI
@@ -218,66 +252,102 @@ class _HomepageState extends State<HomePage> {
                 ),
               ],
               const SizedBox(width: 8),
-
-              // Partner selection Autocomplete widget
+// Combined Partner Selection: Single Text Box (Autocomplete + Dropdown)
               Expanded(
-                flex: 1,
-                child: Autocomplete<String>(
-                  optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty) {
-                      return const Iterable<String>.empty();
-                    }
-                    return suggestionsList.where((String option) {
-                      return option
-                          .toLowerCase()
-                          .contains(textEditingValue.text.toLowerCase());
-                    });
-                  },
-                  onSelected: (String selection) {
-                    setState(() {
-                      selectedPartner = selection;
-                    });
-                  },
-                  fieldViewBuilder: (BuildContext context,
-                      TextEditingController fieldTextEditingController,
-                      FocusNode fieldFocusNode,
-                      VoidCallback onFieldSubmitted) {
-                    return TextField(
-                      controller: fieldTextEditingController,
-                      focusNode: fieldFocusNode,
-                      decoration: InputDecoration(
-                        hintText: "הכנס שם שותף",
-                      ),
-                    );
-                  },
-                  optionsViewBuilder: (BuildContext context,
-                      AutocompleteOnSelected<String> onSelected,
-                      Iterable<String> options) {
-                    return Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(
-                        child: Container(
-                          width: 300,
-                          height: 200,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(10.0),
-                            itemCount: options.length,
-                            itemBuilder: (BuildContext context, int index) {
-                              final String option = options.elementAt(index);
-                              return GestureDetector(
-                                onTap: () {
-                                  onSelected(option);
-                                },
-                                child: ListTile(
-                                  title: Text(option),
-                                ),
-                              );
-                            },
+                flex: 3,
+                child: Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    // Autocomplete text box
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return suggestionsList.where((String option) {
+                          return option
+                              .toLowerCase()
+                              .contains(textEditingValue.text.toLowerCase());
+                        });
+                      },
+                      onSelected: (String selection) {
+                        setState(() {
+                          selectedPartner = selection;
+                          _partnerController.text =
+                              selection; // Update the text box with the selected partner
+                        });
+                      },
+                      fieldViewBuilder: (BuildContext context,
+                          TextEditingController fieldTextEditingController,
+                          FocusNode fieldFocusNode,
+                          VoidCallback onFieldSubmitted) {
+                        _partnerController =
+                            fieldTextEditingController; // Link the controller with the text field
+                        return TextField(
+                          controller: _partnerController,
+                          focusNode: fieldFocusNode,
+                          decoration: InputDecoration(
+                            hintText: "הכנס שם שותף",
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.arrow_drop_down),
+                              onPressed: () {
+                                // Show a drop-down menu with the last 5 partners when the icon is clicked
+                                showMenu<String>(
+                                  context: context,
+                                  position: RelativeRect.fromLTRB(0, 40, 0,
+                                      0), // Positioning of the dropdown
+                                  items: lastSelectedPartners
+                                      .map((String partner) {
+                                    return PopupMenuItem<String>(
+                                      value: partner,
+                                      child: Text(partner),
+                                    );
+                                  }).toList(),
+                                ).then((String? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      selectedPartner = newValue;
+                                      _partnerController.text =
+                                          newValue; // Update the text box with the selected value
+                                    });
+                                  }
+                                });
+                              },
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
+                        );
+                      },
+                      optionsViewBuilder: (BuildContext context,
+                          AutocompleteOnSelected<String> onSelected,
+                          Iterable<String> options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            child: Container(
+                              width: 300,
+                              height: 200,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.all(10.0),
+                                itemCount: options.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final String option =
+                                      options.elementAt(index);
+                                  return GestureDetector(
+                                    onTap: () {
+                                      onSelected(option);
+                                    },
+                                    child: ListTile(
+                                      title: Text(option),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
