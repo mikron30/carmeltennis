@@ -593,6 +593,18 @@ class CourtReservationsState extends State<CourtReservations> {
     String? longPartnerName = courtsReservations[courtIndex][hour]?['partner'];
     String partnerName = formatName(longPartnerName ?? '');
 
+    // Create a DateTime object for the current slot's time on the selected date
+    DateTime now = DateTime.now();
+    DateTime reservationDateTime = DateTime(
+      widget.selectedDate.year,
+      widget.selectedDate.month,
+      widget.selectedDate.day,
+      hour,
+    );
+
+    // Disable the button if the date/time is in the past
+    bool isPast = reservationDateTime.isBefore(now);
+
     bool isMine = longUserName == widget.myUserName ||
         longPartnerName == widget.myUserName;
     // Using null-aware operators for safety
@@ -605,17 +617,26 @@ class CourtReservationsState extends State<CourtReservations> {
         child: Text("מאמן"),
       );
     } else {
+// Disable if the time is in the past
       return ElevatedButton(
-        onPressed: () => _reserve(
-            courtIndex + 1, hour), // Assuming court numbering starts from 1
+        onPressed: (isReserved && !isMine) || isPast && !isMine
+            ? null // Disable if reserved by someone else or in the past and not yours
+            : () => _reserve(
+                courtIndex + 1, hour), // Enable for your own reservations
         style: ElevatedButton.styleFrom(
           backgroundColor: isReserved
               ? isMine
                   ? Colors.blue
                   : Colors.red
-              : Colors.green,
+              : isPast
+                  ? Colors.grey // Gray for past times
+                  : Colors.green, // Available slot
         ),
-        child: Text(isReserved ? "$userName, $partnerName" : "פנוי"),
+        child: Text(isReserved
+            ? "$userName, $partnerName"
+            : isPast
+                ? "סגור" // Label for past time slots
+                : "פנוי"), // Available slot label
       );
     }
   }
