@@ -229,8 +229,10 @@ class CourtReservationsState extends State<CourtReservations> {
               if (widget.myUserName == "מועדון כרמל" ||
                   (!reservationDateTime.isBefore(now) &&
                       !(reservationDateTime.hour == now.hour))) {
+                // Await confirmation dialog and check if widget is still mounted
                 bool confirmDelete =
                     await _showDeleteConfirmationDialog(context);
+                if (!mounted) return; // Check if still mounted after async call
                 if (confirmDelete) {
                   // Check if the reservation time is in the past or the current hour
                   await firstDocument.reference.delete();
@@ -567,7 +569,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   : Colors.red
               : Colors.green,
         ),
-        child: Text(isReserved ? "$userName, $partnerName" : "פנוי - הזמן"),
+        child: Text(isReserved ? "$userName, $partnerName" : "פנוי"),
       );
     }
   }
