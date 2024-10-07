@@ -255,7 +255,10 @@ class CourtReservationsState extends State<CourtReservations> {
           final firstDocument = existingReservationSnapshot.docs.first;
           final data = firstDocument.data();
           final storedUserName = data['userName'];
-          if (storedUserName == widget.myUserName || isManager) {
+          final partnerUserName = data['partner'];
+          if (storedUserName == widget.myUserName ||
+              partnerUserName == widget.myUserName ||
+              isManager) {
             try {
               if (isManager ||
                   (!reservationDateTime.isBefore(now) &&
