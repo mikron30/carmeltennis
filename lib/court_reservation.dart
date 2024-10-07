@@ -26,8 +26,7 @@ class CourtReservationsState extends State<CourtReservations> {
   int numberOfCourts = 2; // Default to 2 courts, will be updated in initState
   // Dynamic list to store reservations for each court
   List<Map<int, Map<String, dynamic>>> courtsReservations = [];
-  bool isHolidayEve = false;
-  bool isManager = false;
+  String? holidayType;
   void initReservations(int numberOfCourts) {
     // Clear the existing reservations to avoid conflicts
     courtsReservations.clear();
@@ -49,8 +48,6 @@ class CourtReservationsState extends State<CourtReservations> {
   @override
   void initState() {
     super.initState();
-    isManager = widget.myUserName == "מועדון כרמל";
-    checkIfHolidayEve(widget.selectedDate);
     _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
       setState(() {
         numberOfCourts = courtCount;
@@ -64,7 +61,6 @@ class CourtReservationsState extends State<CourtReservations> {
   void didUpdateWidget(covariant CourtReservations oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedDate != oldWidget.selectedDate) {
-      checkIfHolidayEve(widget.selectedDate);
       _determineNumberOfCourts(widget.selectedDate).then((courtCount) {
         setState(() {
           numberOfCourts = courtCount;
@@ -75,28 +71,17 @@ class CourtReservationsState extends State<CourtReservations> {
     }
   }
 
-  Future<void> checkIfHolidayEve(DateTime date) async {
-    // Check if user is logged in
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      // No user is logged in
-      return; // Or handle this case as needed
-    }
+  Future<String> _getHolidayType(DateTime date) async {
     final formattedDate = DateFormat('yyyy-MM-dd').format(date);
     final docSnapshot = await FirebaseFirestore.instance
         .collection('holidays')
         .doc(formattedDate)
         .get();
 
-    if (docSnapshot.exists && docSnapshot.data()?['isErev'] == true) {
-      setState(() {
-        isHolidayEve = true;
-      });
-    } else {
-      setState(() {
-        isHolidayEve = false;
-      });
+    if (docSnapshot.exists) {
+      return docSnapshot['holidayType'] ?? 'חג';
     }
+    return 'רגיל'; // Return 'regular' if there's no holiday
   }
 
   void _fetchReservations() {
@@ -253,6 +238,11 @@ class CourtReservationsState extends State<CourtReservations> {
             .where('date', isEqualTo: formattedDate)
             .where('courtNumber', isEqualTo: courtNumber)
             .where('hour', isEqualTo: hour);
+        bool isManager = widget.myUserName == "אודי אש" ||
+            widget.myUserName == "רני לפלר" ||
+            widget.myUserName == "עפר בן ישי" ||
+            widget.myUserName == "מיקי זילברשטיין" ||
+            widget.myUserName == "מועדון כרמל";
 
         final existingReservationSnapshot =
             await existingReservationQuery.get();
@@ -265,10 +255,9 @@ class CourtReservationsState extends State<CourtReservations> {
           final firstDocument = existingReservationSnapshot.docs.first;
           final data = firstDocument.data();
           final storedUserName = data['userName'];
-          if (storedUserName == widget.myUserName ||
-              widget.myUserName == "מועדון כרמל") {
+          if (storedUserName == widget.myUserName || isManager) {
             try {
-              if (widget.myUserName == "מועדון כרמל" ||
+              if (isManager ||
                   (!reservationDateTime.isBefore(now) &&
                       !(reservationDateTime.hour == now.hour))) {
                 // Await confirmation dialog and check if widget is still mounted
@@ -315,8 +304,7 @@ class CourtReservationsState extends State<CourtReservations> {
                 await reservationManager.hasExistingReservation(
                     widget.selectedPartner ?? '', selectedDate);
 
-            if (widget.myUserName != "מועדון כרמל" &&
-                (userHasReservation || partnerHasReservation)) {
+            if (!isManager && (userHasReservation || partnerHasReservation)) {
               if (!mounted) {
                 return; // Add this check before showDialog or using context after async gap
               }
@@ -443,32 +431,21 @@ class CourtReservationsState extends State<CourtReservations> {
     }
   }
 
-  Future<bool> _isHoliday(DateTime date) async {
-    // Check if user is logged in
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      // No user is logged in
-      return false; // Or handle this case as needed
-    }
-    final formattedDate = DateFormat('yyyy-MM-dd').format(date);
-    final docSnapshot = await FirebaseFirestore.instance
-        .collection('holidays')
-        .doc(formattedDate)
-        .get();
-    return docSnapshot
-        .exists; // Returns true if a holiday document exists for the selected date
-  }
-
   Future<int> _determineNumberOfCourts(DateTime date) async {
-    bool isHoliday = await _isHoliday(date);
+    holidayType = await _getHolidayType(date);
     int dayOfWeek = date.weekday;
-    if (dayOfWeek == DateTime.friday ||
-        dayOfWeek == DateTime.saturday ||
-        isHoliday) {
-      return 3; // 3 courts on weekends and holidays
-    } else {
-      return 2; // 2 courts on regular days
+    // Determine the number of courts based on the holiday type
+    if (holidayType == 'אין מגרשים') {
+      return 0; // No courts available
+    } else if (holidayType == 'מגרש אחד') {
+      return 1; // Only one court available
+    } else if (holidayType == 'חג' ||
+        holidayType == 'ערב חג' ||
+        dayOfWeek == DateTime.friday ||
+        dayOfWeek == DateTime.saturday) {
+      return 3; // Only one court available
     }
+    return 2;
   }
 
   Future<Map<String, dynamic>> _fetchData(DateTime date) async {
@@ -607,8 +584,15 @@ class CourtReservationsState extends State<CourtReservations> {
 
     bool isMine = longUserName == widget.myUserName ||
         longPartnerName == widget.myUserName;
+    bool isManager = widget.myUserName == "אודי אש" ||
+        widget.myUserName == "רני לפלר" ||
+        widget.myUserName == "עפר בן ישי" ||
+        widget.myUserName == "מיקי זילברשטיין" ||
+        widget.myUserName == "מועדון כרמל";
+
     // Using null-aware operators for safety
-    if ((widget.selectedDate.weekday == DateTime.friday || isHolidayEve) &&
+    if (((widget.selectedDate.weekday == DateTime.friday ||
+            (holidayType != null && holidayType == "ערב חג"))) &&
         (hour >= 7 && hour <= 18) &&
         courtIndex == 2) {
       return ElevatedButton(
@@ -619,7 +603,8 @@ class CourtReservationsState extends State<CourtReservations> {
     } else {
 // Disable if the time is in the past
       return ElevatedButton(
-        onPressed: (isReserved && !isMine) || isPast && !isMine
+        onPressed: (isReserved && !isMine && !isManager) ||
+                (isPast && !isManager)
             ? null // Disable if reserved by someone else or in the past and not yours
             : () => _reserve(
                 courtIndex + 1, hour), // Enable for your own reservations

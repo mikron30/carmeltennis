@@ -26,6 +26,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomepageState extends State<HomePage> {
+  bool isManager = false;
   DateTime? selectedDate;
   String? selectedPartner;
   List<String> suggestionsList = []; // Assuming this is populated elsewhere
@@ -78,11 +79,9 @@ class _HomepageState extends State<HomePage> {
         return '$firstName $lastName'.trim(); // Ensure no extra spaces
       }).toList();
 
-      // If the user is not "מועדון כרמל", remove them from the list of partners
-      if (myUserName != "מועדון כרמל") {
+      if (!isManager) {
         fetchedUsers.removeWhere((userName) =>
-            userName.trim().toLowerCase() == myUserName?.trim().toLowerCase() ||
-            userName == "מועדון כרמל");
+            userName.trim().toLowerCase() == myUserName?.trim().toLowerCase());
       }
 
       // Update the suggestions list with the filtered users
@@ -125,6 +124,11 @@ class _HomepageState extends State<HomePage> {
       String? userEmail = FirebaseAuth.instance.currentUser?.email;
       if (userEmail != null) {
         myUserName = await UserManager.instance.getUsernameByEmail(userEmail);
+        isManager = myUserName == "אודי אש" ||
+            myUserName == "רני לפלר" ||
+            myUserName == "עפר בן ישי" ||
+            myUserName == "מיקי זילברשטיין" ||
+            myUserName == "מועדון כרמל";
       }
     } catch (e) {}
   }
@@ -135,6 +139,7 @@ class _HomepageState extends State<HomePage> {
     selectedDate = DateTime.now();
     final User? user = FirebaseAuth.instance.currentUser;
     // Fetch last 5 reserved partners when the widget is initialized
+
     if (user != null) {
       fetchLastFivePartners(user.email!).then((partners) {
         setState(() {
@@ -192,14 +197,13 @@ class _HomepageState extends State<HomePage> {
                       // Open the drawer
                       Scaffold.of(context).openDrawer();
                     },
-                    color: myUserName == "מועדון כרמל" ? Colors.red : null,
+                    color: isManager ? Colors.red : null,
                   );
                 },
               ),
               const SizedBox(width: 8),
               // Conditional display based on the username
-              if (myUserName == "מועדון כרמל") ...[
-                // Show full date selector for "מועדון כרמל"
+              if (isManager) ...[
                 Flexible(
                   flex: 1,
                   child: DateSelector(
@@ -436,7 +440,7 @@ class _HomepageState extends State<HomePage> {
         ),
       ),
 
-      if (myUserName == "מועדון כרמל")
+      if (isManager)
         Container(
           decoration: BoxDecoration(
             border: Border.all(color: Colors.blue),
@@ -455,7 +459,7 @@ class _HomepageState extends State<HomePage> {
           ),
         ),
       // New "Manage Users" option
-      if (myUserName == "מועדון כרמל")
+      if (isManager)
         Container(
           decoration: BoxDecoration(
             border: Border.all(color: Colors.blue),

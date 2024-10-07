@@ -9,7 +9,7 @@ class AddHolidayScreen extends StatefulWidget {
 
 class _AddHolidayScreenState extends State<AddHolidayScreen> {
   DateTime selectedDate = DateTime.now();
-  bool isErev = false;
+  String holidayType = 'חג'; // Default is 3 courts available
   bool isDelete = false; // Checkbox for delete
   List<DocumentSnapshot> holidays = []; // Holds fetched holidays
   Future<void> fetchHolidays() async {
@@ -57,7 +57,8 @@ class _AddHolidayScreenState extends State<AddHolidayScreen> {
       // If isDelete is false, add or update the holiday document
       await db.collection('holidays').doc(formattedDate).set({
         'date': formattedDate,
-        'isErev': isErev,
+        'holidayType':
+            holidayType, // Stores 'noCourt', 'singleCourt', or 'threeCourts'
       });
       // Optionally show a confirmation message or handle errors
     }
@@ -82,19 +83,32 @@ class _AddHolidayScreenState extends State<AddHolidayScreen> {
             Text(
               'Selected date: ${DateFormat('yyyy-MM-dd').format(selectedDate)}',
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Checkbox(
-                  value: isErev,
-                  onChanged: (bool? value) {
-                    setState(() {
-                      isErev = value!;
-                    });
-                  },
+// Dropdown for selecting holiday type
+            DropdownButton<String>(
+              value: holidayType,
+              items: [
+                DropdownMenuItem(
+                  value: 'אין מגרשים',
+                  child: Text('אין מגרשים'),
                 ),
-                const Text("Is Erev Holiday"),
+                DropdownMenuItem(
+                  value: 'מגרש אחד',
+                  child: Text('מגרש אחד'),
+                ),
+                DropdownMenuItem(
+                  value: 'חג',
+                  child: Text('שלושה מגרשים, חג, כמו שבת'),
+                ),
+                DropdownMenuItem(
+                  value: 'ערב חג',
+                  child: Text('ערב חג, כמו שישי'),
+                ),
               ],
+              onChanged: (String? newValue) {
+                setState(() {
+                  holidayType = newValue!;
+                });
+              },
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -114,15 +128,29 @@ class _AddHolidayScreenState extends State<AddHolidayScreen> {
               onPressed: _handleHolidayFirestore,
               child: Text(isDelete ? 'Delete Holiday' : 'Add Holiday'),
             ),
+// List of holidays with their types
             Expanded(
               child: ListView.builder(
                 itemCount: holidays.length,
                 itemBuilder: (context, index) {
                   final holiday = holidays[index];
+                  String holidayStatus;
+                  switch (holiday['holidayType']) {
+                    case 'אין מגרשים':
+                      holidayStatus = 'אין מגרשים';
+                      break;
+                    case 'מגרש אחד':
+                      holidayStatus = 'מגרש אחד';
+                      break;
+                    case 'ערב חג':
+                      holidayStatus = 'ערב חג';
+                      break;
+                    default:
+                      holidayStatus = 'חג';
+                  }
                   return ListTile(
                     title: Text(holiday['date']),
-                    subtitle:
-                        holiday['isErev'] ? const Text('Erev Holiday') : null,
+                    subtitle: Text(holidayStatus),
                   );
                 },
               ),
