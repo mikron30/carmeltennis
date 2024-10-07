@@ -603,25 +603,34 @@ class CourtReservationsState extends State<CourtReservations> {
     } else {
 // Disable if the time is in the past
       return ElevatedButton(
-        onPressed: (isReserved && !isMine && !isManager) ||
-                (isPast && !isManager)
-            ? null // Disable if reserved by someone else or in the past and not yours
-            : () => _reserve(
-                courtIndex + 1, hour), // Enable for your own reservations
+        onPressed: (isPast && !isReserved && !isManager)
+            ? null // Disable if unreserved, in the past, and user is not a manager
+            : () {
+                // Check if the reservation is by someone else and not the user's
+                if (isReserved && !isMine && !isManager) {
+                  return; // Do nothing if the slot is reserved by someone else
+                }
+                // Proceed with reservation if conditions are valid
+                _reserve(courtIndex + 1, hour);
+              },
         style: ElevatedButton.styleFrom(
           backgroundColor: isReserved
-              ? isMine
+              ? (isMine
                   ? Colors.blue
-                  : Colors.red
-              : isPast
-                  ? Colors.grey // Gray for past times
-                  : Colors.green, // Available slot
+                  : Colors
+                      .red) // Blue if it's the user's reservation, Red if someone else's
+              : (isPast
+                  ? Colors.grey
+                  : Colors
+                      .green), // Gray for past unreserved slots, Green for available
         ),
-        child: Text(isReserved
-            ? "$userName, $partnerName"
-            : isPast
-                ? "סגור" // Label for past time slots
-                : "פנוי"), // Available slot label
+        child: Text(
+          isReserved
+              ? "$userName, $partnerName"
+              : isPast
+                  ? "סגור" // Label for past time slots
+                  : "פנוי", // Label for available slots
+        ),
       );
     }
   }

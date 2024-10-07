@@ -29053,9 +29053,13 @@ this.b=b},
 a7k:function a7k(){},
 a7h:function a7h(a){this.a=a},
 a7g:function a7g(a){this.a=a},
-a7f:function a7f(a,b,c){this.a=a
-this.b=b
-this.c=c},
+a7f:function a7f(a,b,c,d,e,f){var _=this
+_.a=a
+_.b=b
+_.c=c
+_.d=d
+_.e=e
+_.f=f},
 qv:function qv(){},
 Bx:function Bx(a,b){this.c=a
 this.a=b},
@@ -97672,9 +97676,7 @@ l=g==="\u05d0\u05d5\u05d3\u05d9 \u05d0\u05e9"||g==="\u05e8\u05e0\u05d9 \u05dc\u0
 if(A.oO(h.c)!==5){h=j.r
 h=h!=null&&h==="\u05e2\u05e8\u05d1 \u05d7\u05d2"}else h=!0
 if(h&&b>=7&&b<=18&&a===2){h=A.aa4(i,i,B.e3,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i)
-return A.iV(!1,A.aX("\u05de\u05d0\u05de\u05df",i,i,i,i,i,i),i,i,B.T,i,i,i,i,i,i,h)}else{if(!(s&&!m&&!l))h=n&&!l
-else h=!0
-h=h?i:new A.a7f(j,a,b)
+return A.iV(!1,A.aX("\u05de\u05d0\u05de\u05df",i,i,i,i,i,i),i,i,B.T,i,i,i,i,i,i,h)}else{h=n&&!s&&!l?i:new A.a7f(j,s,m,l,a,b)
 if(s)g=m?B.bJ:B.vr
 else g=n?B.e3:B.Od
 g=A.aa4(i,i,g,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i)
@@ -97777,7 +97779,9 @@ for(s=this.a,r=0;r<s.e;++r)o.push(new A.vC(1,B.hQ,new A.iK(B.I,q,q,s.aqd(r,p),q)
 return A.cw(o,B.y,B.fm,B.x,q)},
 $S:649}
 A.a7f.prototype={
-$0(){return this.a.lI(this.b+1,this.c)},
+$0(){var s=this
+if(s.b&&!s.c&&!s.d)return
+s.a.lI(s.e+1,s.f)},
 $S:0}
 A.qv.prototype={}
 A.Bx.prototype={
