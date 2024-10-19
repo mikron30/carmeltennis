@@ -100,6 +100,7 @@ class _HomepageState extends State<HomePage> {
         .collection('users_2024')
         .where('מייל', isEqualTo: userEmail) // Query by the 'מייל' field
         .get();
+    List<String> lastFivePartners = [];
 
     // If the document exists, fetch the 'lastFivePartners' field
     if (querySnapshot.docs.isNotEmpty) {
@@ -108,15 +109,21 @@ class _HomepageState extends State<HomePage> {
         try {
           Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
           // Return the list of last 5 partners or an empty list if not found
-          return List<String>.from(data['lastFivePartners'] ?? []);
+          lastFivePartners = List<String>.from(data['lastFivePartners'] ?? []);
+          lastFivePartners = lastFivePartners.map((partner) {
+            return partner.startsWith('!') ? partner.substring(1) : partner;
+          }).toList();
         } catch (e) {
           // Return an empty list if 'lastFivePartners' field does not exist
-          return [];
+          lastFivePartners = [];
         }
       }
     }
+    if (isManager) {
+      lastFivePartners.add("הזמנת מנהל");
+    }
 
-    return [];
+    return lastFivePartners;
   }
 
   Future<void> fetchMyUserName() async {
@@ -133,28 +140,61 @@ class _HomepageState extends State<HomePage> {
     } catch (e) {}
   }
 
+  Future<String?> _showCustomMessageDialog(BuildContext context) async {
+    TextEditingController messageController = TextEditingController();
+
+    return await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('הכנס הודעה'),
+          content: TextField(
+            controller: messageController,
+            decoration: const InputDecoration(hintText: 'הודעה עבור ההזמנה'),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('ביטול'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog without saving
+              },
+            ),
+            TextButton(
+              child: const Text('אישור'),
+              onPressed: () {
+                Navigator.of(context).pop(
+                    '!' + messageController.text); // Return the entered message
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     selectedDate = DateTime.now();
     final User? user = FirebaseAuth.instance.currentUser;
-    // Fetch last 5 reserved partners when the widget is initialized
 
     if (user != null) {
-      fetchLastFivePartners(user.email!).then((partners) {
-        setState(() {
-          lastSelectedPartners = partners; // Store the fetched partners
-        });
-      });
-    }
-    if (user != null) {
-      fetchAllUsers(); // Ensure this is being calle
-      // Fetch the user name before building the UI
+      // Fetch the user name before fetching the last 5 partners
       fetchMyUserName().then((_) {
         setState(() {
           // Rebuild the UI after the username is fetched
         });
+
+        // Now fetch the last 5 reserved partners after the username has been fetched
+        fetchLastFivePartners(user.email!).then((partners) {
+          setState(() {
+            lastSelectedPartners = partners; // Store the fetched partners
+          });
+        });
       });
+
+      // Fetch all users
+      fetchAllUsers();
     }
   }
 
@@ -265,6 +305,7 @@ class _HomepageState extends State<HomePage> {
                     // Autocomplete text box
                     Autocomplete<String>(
                       optionsBuilder: (TextEditingValue textEditingValue) {
+                        // Check if the current user is a manager
                         if (textEditingValue.text.isEmpty) {
                           return const Iterable<String>.empty();
                         }
@@ -309,11 +350,28 @@ class _HomepageState extends State<HomePage> {
                                   }).toList(),
                                 ).then((String? newValue) {
                                   if (newValue != null) {
-                                    setState(() {
-                                      selectedPartner = newValue;
-                                      _partnerController.text =
-                                          newValue; // Update the text box with the selected value
-                                    });
+                                    if (newValue == "הזמנת מנהל") {
+                                      // Open a new window to input a custom message when "הזמנת מנהל" is selected
+                                      _showCustomMessageDialog(context)
+                                          .then((customMessage) {
+                                        if (customMessage != null &&
+                                            customMessage.isNotEmpty) {
+                                          setState(() {
+                                            selectedPartner =
+                                                customMessage; // Use the custom message as the selected partner
+                                            _partnerController.text =
+                                                customMessage; // Display it in the text box
+                                          });
+                                        }
+                                      });
+                                    } else {
+                                      // If any other partner is selected, use it as the selected partner
+                                      setState(() {
+                                        selectedPartner = newValue;
+                                        _partnerController.text =
+                                            newValue; // Update the text box with the selected value
+                                      });
+                                    }
                                   }
                                 });
                               },

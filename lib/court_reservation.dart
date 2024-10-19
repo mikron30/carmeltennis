@@ -208,7 +208,8 @@ class CourtReservationsState extends State<CourtReservations> {
       }
 
       // Add the new partner to the list and ensure only 5 are kept
-      if (!lastFivePartners.contains(newPartner)) {
+      if (!newPartner.startsWith('!') &&
+          !lastFivePartners.contains(newPartner)) {
         lastFivePartners.add(newPartner);
         if (lastFivePartners.length > 5) {
           lastFivePartners.removeAt(0); // Keep only the last 5
@@ -297,7 +298,7 @@ class CourtReservationsState extends State<CourtReservations> {
             }
           }
         } else {
-          if (widget.selectedPartner != '') {
+          if (isManager || widget.selectedPartner != '') {
             ReservationManager reservationManager = ReservationManager();
 
             // Check if the user or the partner already has a reservation on the given date
@@ -572,6 +573,13 @@ class CourtReservationsState extends State<CourtReservations> {
     String userName = formatName(longUserName ?? '');
     String? longPartnerName = courtsReservations[courtIndex][hour]?['partner'];
     String partnerName = formatName(longPartnerName ?? '');
+    // Check if the partner field starts with "!" indicating a custom message
+    bool isCustomMessage =
+        longPartnerName != null && longPartnerName.startsWith('!');
+    // Remove the leading "!" for display if it's a custom message
+    String displayMessage = isCustomMessage
+        ? longPartnerName!.substring(1) // Remove "!" for custom messages
+        : "$userName, $partnerName"; // Display as usual if it's a regular partner
 
     // Create a DateTime object for the current slot's time on the selected date
     DateTime now = DateTime.now();
@@ -629,7 +637,7 @@ class CourtReservationsState extends State<CourtReservations> {
         ),
         child: Text(
           isReserved
-              ? "$userName, $partnerName"
+              ? displayMessage
               : isPast
                   ? "סגור" // Label for past time slots
                   : "פנוי", // Label for available slots
