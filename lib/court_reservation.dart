@@ -93,6 +93,7 @@ class CourtReservationsState extends State<CourtReservations> {
     Map<String, dynamic> reservationsData = {}; // Initialize an empty map
     String formattedDate =
         "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
+
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -106,7 +107,6 @@ class CourtReservationsState extends State<CourtReservations> {
             .where('date', isEqualTo: formattedDate);
 
         final QuerySnapshot querySnapshot = await query.get();
-
         if (querySnapshot.docs.isNotEmpty) {
           // Process the reservation data here
           final List<Reservation> reservations = [];
@@ -224,6 +224,70 @@ class CourtReservationsState extends State<CourtReservations> {
     }
   }
 
+  // Add this function to count the weekly reservations between specific hours
+  Future<int> _countReservation(String userName, DateTime selectedDate,
+      int startHour, int endHour) async {
+    // Define the start and end of the week (Sunday to Thursday)
+    DateTime startOfWeek = selectedDate.subtract(
+      Duration(days: (selectedDate.weekday % 7)),
+    );
+    DateTime endOfWeek = startOfWeek.add(Duration(days: 4)); // End on Thursday
+
+    String startOfWeekFormatted = DateFormat('yyyy-MM-dd').format(startOfWeek);
+    String endOfWeekFormatted = DateFormat('yyyy-MM-dd').format(endOfWeek);
+
+    try {
+      // Query for reservations where userName equals userName
+      final userNameQuery = FirebaseFirestore.instance
+          .collection('reservations')
+          .where('userName', isEqualTo: userName);
+      final QuerySnapshot userNameSnapshot = await userNameQuery.get();
+
+      // Filter each result set for the date range and specific hours
+      int userNameCount = userNameSnapshot.docs.where((doc) {
+        String date = doc['date'];
+        int hour = doc['hour'];
+        bool withinDateRange = date.compareTo(startOfWeekFormatted) >= 0 &&
+            date.compareTo(endOfWeekFormatted) <= 0;
+        bool withinHours = hour >= startHour && hour <= endHour;
+        return withinDateRange && withinHours;
+      }).length;
+
+      final partnerNameQuery = FirebaseFirestore.instance
+          .collection('reservations')
+          .where('partner', isEqualTo: userName);
+      final QuerySnapshot partnerNameSnapshot = await partnerNameQuery.get();
+
+      // Filter each result set for the date range and specific hours
+      int partnerNameCount = partnerNameSnapshot.docs.where((doc) {
+        String date = doc['date'];
+        int hour = doc['hour'];
+        bool withinDateRange = date.compareTo(startOfWeekFormatted) >= 0 &&
+            date.compareTo(endOfWeekFormatted) <= 0;
+        bool withinHours = hour >= startHour && hour <= endHour;
+        return withinDateRange && withinHours;
+      }).length;
+
+      int total = partnerNameCount + userNameCount;
+      print("reservations count $total");
+
+      // Return the total count
+      return total;
+    } catch (e) {
+      // Handle any errors
+      print("Error in counting weekly reservations between hours: $e");
+      return 0; // Return a default value in case of error
+    }
+  }
+
+  bool isBeforeOrNow(DateTime reservationDateTime) {
+    DateTime now = DateTime.now();
+    DateTime currentDateTime = DateTime(now.year, now.month, now.day, now.hour);
+
+    return reservationDateTime.isBefore(currentDateTime) ||
+        reservationDateTime.isAtSameMomentAs(currentDateTime);
+  }
+
   void _reserve(int courtNumber, int hour) async {
     final User? user = FirebaseAuth.instance.currentUser;
     DateTime selectedDate = widget.selectedDate;
@@ -261,9 +325,7 @@ class CourtReservationsState extends State<CourtReservations> {
               partnerUserName == widget.myUserName ||
               isManager) {
             try {
-              if (isManager ||
-                  (!reservationDateTime.isBefore(now) &&
-                      !(reservationDateTime.hour == now.hour))) {
+              if (isManager || (!isBeforeOrNow(reservationDateTime))) {
                 // Await confirmation dialog and check if widget is still mounted
                 bool confirmDelete =
                     await _showDeleteConfirmationDialog(context);
@@ -353,6 +415,41 @@ class CourtReservationsState extends State<CourtReservations> {
                   },
                 );
               } else {
+                bool canReserveMe = await _countReservation(
+                        widget.myUserName ?? '', selectedDate, 18, 20) <
+                    3;
+                bool canReservepartner = await _countReservation(
+                        widget.selectedPartner ?? '', selectedDate, 18, 20) <
+                    3;
+                if (!isManager &&
+                    hour >= 18 &&
+                    hour <= 20 &&
+                    (!canReserveMe || !canReservepartner)) {
+                  // Show an error message if the user exceeded the weekly limit
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('שגיאה'),
+                        content: canReservepartner
+                            ? const Text(
+                                ' הגעת למכסת ההזמנות השבועיות בשעות הערב 6 עד 9')
+                            : const Text(
+                                ' השותפ.ה הגיע.ה למכסת ההזמנות השבועיות בשעות הערב 6 עד 9'),
+                        actions: <Widget>[
+                          TextButton(
+                            child: const Text('אישור'),
+                            onPressed: () {
+                              Navigator.of(context).pop(); // Close the dialog
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                  return; // Exit the function without reserving
+                }
+
                 // Create the reservation data including the date
                 final reservationData = {
                   'date': formattedDate, // Add the date to the reservation data

@@ -64,32 +64,47 @@ class _HomepageState extends State<HomePage> {
 
   void fetchAllUsers() async {
     try {
-      String? userEmail =
-          FirebaseAuth.instance.currentUser?.email; // Now assigns user's email
-      myUserName =
-          await UserManager.instance.getUsernameByEmail(userEmail ?? '');
+      // Wait for FirebaseAuth to restore the user if not already available
+      User? currentUser = FirebaseAuth.instance.currentUser;
 
-      // Query the 'users_2024' collection
+      // If the current user is null, wait a moment and re-check
+      if (currentUser == null) {
+        await Future.delayed(Duration(seconds: 1)); // Add a small delay
+        currentUser = FirebaseAuth.instance.currentUser;
+      }
+
+      // If email is still null, exit the function
+      if (currentUser?.email == null) {
+        print("User email is null. Unable to fetch users.");
+        return;
+      }
+
+      String userEmail = currentUser!.email!;
+
+      // Fetch username if it's null
+      if (myUserName == null) {
+        myUserName = await UserManager.instance.getUsernameByEmail(userEmail);
+      }
+
       QuerySnapshot querySnapshot =
           await FirebaseFirestore.instance.collection('users_2024').get();
 
       List<String> fetchedUsers = querySnapshot.docs.map((doc) {
         String firstName = doc['שם פרטי'];
         String lastName = doc['שם משפחה'];
-        return '$firstName $lastName'.trim(); // Ensure no extra spaces
+        return '$firstName $lastName'.trim();
       }).toList();
 
-      if (!isManager) {
+      // Remove current user's name if not a manager
+      if (!isManager && myUserName != null) {
         fetchedUsers.removeWhere((userName) =>
             userName.trim().toLowerCase() == myUserName?.trim().toLowerCase());
       }
 
-      // Update the suggestions list with the filtered users
       setState(() {
         suggestionsList = fetchedUsers;
       });
     } catch (e) {
-      // Handle the error accordingly
       print("Error fetching users: $e");
     }
   }
@@ -191,10 +206,9 @@ class _HomepageState extends State<HomePage> {
             lastSelectedPartners = partners; // Store the fetched partners
           });
         });
+        // Fetch all users
+        fetchAllUsers();
       });
-
-      // Fetch all users
-      fetchAllUsers();
     }
   }
 
