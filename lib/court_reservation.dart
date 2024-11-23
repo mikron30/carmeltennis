@@ -308,7 +308,29 @@ class CourtReservationsState extends State<CourtReservations> {
             widget.myUserName == "עפר בן ישי" ||
             widget.myUserName == "מיקי זילברשטיין" ||
             widget.myUserName == "מועדון כרמל";
-
+        // Restrict users from reserving for themselves if they are not a manager
+        if (!isManager && widget.selectedPartner == widget.myUserName) {
+          // Show an error dialog
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('שגיאת הזמנה'),
+                content: const Text(
+                    'לא ניתן להזמין לעצמך. בחר שותפ.ה אחר.ת להזמנה.'),
+                actions: <Widget>[
+                  TextButton(
+                    child: const Text('אישור'),
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close the dialog
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+          return; // Exit the function without reserving
+        }
         final existingReservationSnapshot =
             await existingReservationQuery.get();
         DateTime now = DateTime.now();
@@ -585,19 +607,20 @@ class CourtReservationsState extends State<CourtReservations> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // Time Column
-                    Expanded(
-                      child: Center(
-                        child: const Text('שעה'),
-                      ),
-                    ),
                     // Court Columns
-                    for (int i = 0; i < numberOfCourts; i++)
+                    for (int i = numberOfCourts - 1; i >= 0; i--)
                       Expanded(
                         child: Center(
                           child: Text('מגרש ${i + 1}'),
                         ),
                       ),
+                    // Time Column
+                    const SizedBox(
+                      width: 50, // Matches the width of "07:00"
+                      child: Center(
+                        child: Text('שעה'),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -613,12 +636,6 @@ class CourtReservationsState extends State<CourtReservations> {
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        // Time Column for Each Row
-                        Expanded(
-                          child: Center(
-                            child: Text('$hour:00'),
-                          ),
-                        ),
                         // Loop through each court and build button for each court in the row
                         for (int i = 0; i < numberOfCourts; i++)
                           Expanded(
@@ -626,6 +643,14 @@ class CourtReservationsState extends State<CourtReservations> {
                               child: buildCourtButton(i, hour),
                             ),
                           ),
+                        // Time Column for Each Row
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Center(
+                            child:
+                                Text('${hour.toString().padLeft(2, '0')}:00'),
+                          ),
+                        ),
                       ],
                     );
                   },
