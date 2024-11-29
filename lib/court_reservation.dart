@@ -759,7 +759,7 @@ class CourtReservationsState extends State<CourtReservations> {
         ),
         child: Text(
           isReserved
-              ? displayMessage
+              ? (isManager || isMine ? displayMessage : "תפוס")
               : isPast
                   ? "סגור" // Label for past time slots
                   : "פנוי", // Label for available slots

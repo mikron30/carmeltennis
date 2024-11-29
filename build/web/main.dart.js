@@ -97783,7 +97783,7 @@ return A.iW(!1,A.aX("\u05de\u05d0\u05de\u05df",h,h,h,h,h,h),h,h,B.M,h,h,h,h,h,h,
 if(s)f=l?B.bJ:B.vs
 else f=m?B.e4:B.Oh
 f=A.aaa(h,h,f,h,h,h,h,h,h,h,h,h,h,h,h,h,h,h,h)
-if(s)j=n
+if(s)j=k||l?n:"\u05ea\u05e4\u05d5\u05e1"
 else j=m?"\u05e1\u05d2\u05d5\u05e8":"\u05e4\u05e0\u05d5\u05d9"
 return A.iW(!1,A.aX(j,h,h,h,h,h,h),h,h,B.M,h,h,h,h,g,h,f)}}}
 A.a7r.prototype={
