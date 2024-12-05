@@ -727,7 +727,7 @@ class CourtReservationsState extends State<CourtReservations> {
     if (((widget.selectedDate.weekday == DateTime.friday ||
             (holidayType != null && holidayType == "ערב חג"))) &&
         (hour >= 7 && hour <= 18) &&
-        courtIndex == 2) {
+        courtIndex == 0) {
       return ElevatedButton(
         onPressed: null, // Disable the button
         style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),

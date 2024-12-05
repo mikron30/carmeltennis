@@ -31,9 +31,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           .collection('users_2024')
           .doc(userCredential.user?.uid)
           .set({
-        'email': _emailController.text,
-        'firstName': _firstNameController.text,
-        'lastName': _lastNameController.text,
+        'מייל': _emailController.text,
+        'שם פרטי': _firstNameController.text,
+        'שם משפחה': _lastNameController.text,
         'phoneNumber': _phoneNumberController.text,
         'uid': userCredential.user?.uid,
       });
