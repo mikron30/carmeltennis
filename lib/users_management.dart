@@ -34,8 +34,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         'מייל': _emailController.text,
         'שם פרטי': _firstNameController.text,
         'שם משפחה': _lastNameController.text,
-        'phoneNumber': _phoneNumberController.text,
-        'uid': userCredential.user?.uid,
+        'טלפון': _phoneNumberController.text,
+        'isFirstLogin': true,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -60,7 +60,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         // Fetch the user UID from Firestore based on email
         QuerySnapshot userSnapshot = await FirebaseFirestore.instance
             .collection('users_2024')
-            .where('email', isEqualTo: email)
+            .where('מייל', isEqualTo: email)
             .get();
 
         if (userSnapshot.docs.isNotEmpty) {
