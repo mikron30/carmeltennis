@@ -11,7 +11,7 @@ Future<void> sendEmailToBoth({
   required int hour,
 }) async {
   // 1) Set up your SMTP server
-  final smtpServer = gmail('carmelclub55@gmail.com', 'aBcD12345678');
+  final smtpServer = gmail('carmelclub55@gmail.com', 'vzwv eydc vgsu sohm');
 
   // 2) Format date and hour as strings
   final formattedDate = "${date.day}-${date.month}-${date.year}";
