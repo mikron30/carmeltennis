@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'reservation.dart';
 import 'reservation_manager.dart';
 import 'package:intl/intl.dart';
+import 'email_service.dart';
+import 'user_manager.dart';
 
 class CourtReservations extends StatefulWidget {
   final DateTime selectedDate; // Selected date passed from DateSelector
@@ -269,8 +271,6 @@ class CourtReservationsState extends State<CourtReservations> {
       }).length;
 
       int total = partnerNameCount + userNameCount;
-      print("reservations count $total");
-
       // Return the total count
       return total;
     } catch (e) {
@@ -491,6 +491,22 @@ class CourtReservationsState extends State<CourtReservations> {
                 // Update the last 5 partners after the reservation is saved
                 await updateLastFivePartners(
                     user.email!, widget.selectedPartner!.trim());
+                // After storing the reservation and updating partners, send the email
+                String originatorEmail = user.email!;
+                String originatorName = widget.myUserName!;
+                String partnerName = widget.selectedPartner!.trim();
+                String? partnerEmail =
+                    await UserManager.instance.getEmailByUsername(partnerName);
+                if (partnerEmail != null) {
+                  await sendEmailToBoth(
+                    originatorEmail: originatorEmail,
+                    originatorName: originatorName,
+                    partnerEmail: partnerEmail,
+                    partnerName: partnerName,
+                    date: selectedDate,
+                    hour: hour,
+                  );
+                }
               }
             }
           } else {

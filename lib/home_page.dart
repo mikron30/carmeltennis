@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Import for SystemNavigator.pop()
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart'; // Import GoRouter
 
@@ -235,214 +236,233 @@ class _HomepageState extends State<HomePage> {
     DateTime tomorrow = today.add(const Duration(days: 1));
     String formattedToday = DateFormat('dd').format(today);
     String formattedTomorrow = DateFormat('dd').format(tomorrow);
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.all(8.0), // Add some padding
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Use a Builder to get the correct context for opening the drawer
-              Builder(
-                builder: (BuildContext context) {
-                  return IconButton(
-                    icon: const Icon(Icons.menu),
-                    onPressed: () {
-                      // Open the drawer
-                      Scaffold.of(context).openDrawer();
-                    },
-                    color: isManager ? Colors.red : null,
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-              // Conditional display based on the username
-              if (isManager) ...[
-                Flexible(
-                  flex: 1,
-                  child: DateSelector(
-                    onDateSelected: (DateTime date) {
-                      updateSelectedDate(context, date);
-                    },
-                  ),
-                ),
-              ] else ...[
-                Flexible(
-                  flex: 1,
-                  child: Row(
-                    children: [
-                      // Button for "היום" (Today)
-                      Flexible(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            updateSelectedDate(context, today);
-                          },
-                          child: Text(
-                            formattedToday,
-                            style: TextStyle(
-                              fontWeight: isTodaySelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        setState(() {
+          if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
+            // Swipe right: increment date by 1 day
+            selectedDate = (selectedDate ?? today).add(const Duration(days: 1));
+          } else if (details.primaryVelocity != null &&
+              details.primaryVelocity! < 0) {
+            // Swipe left: decrement date by 1 day
+            selectedDate =
+                (selectedDate ?? today).subtract(const Duration(days: 1));
+          }
+        });
 
-                      // Button for "מחר" (Tomorrow)
-                      Flexible(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            updateSelectedDate(context, tomorrow);
-                          },
-                          child: Text(
-                            formattedTomorrow,
-                            style: TextStyle(
-                              fontWeight: isTomorrowSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+        // Update "Today" and "Tomorrow" button states
+        updateSelectedDate(context, selectedDate!);
+      },
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.all(8.0), // Add some padding
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Use a Builder to get the correct context for opening the drawer
+                Builder(
+                  builder: (BuildContext context) {
+                    return IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () {
+                        // Open the drawer
+                        Scaffold.of(context).openDrawer();
+                      },
+                      color: isManager ? Colors.red : null,
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                // Conditional display based on the username
+                if (isManager) ...[
+                  Flexible(
+                    flex: 1,
+                    child: DateSelector(
+                      onDateSelected: (DateTime date) {
+                        updateSelectedDate(context, date);
+                      },
+                    ),
+                  ),
+                ] else ...[
+                  Flexible(
+                    flex: 1,
+                    child: Row(
+                      children: [
+                        // Button for "היום" (Today)
+                        Flexible(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              updateSelectedDate(context, today);
+                            },
+                            child: Text(
+                              formattedToday,
+                              style: TextStyle(
+                                fontWeight: isTodaySelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
+
+                        // Button for "מחר" (Tomorrow)
+                        Flexible(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              updateSelectedDate(context, tomorrow);
+                            },
+                            child: Text(
+                              formattedTomorrow,
+                              style: TextStyle(
+                                fontWeight: isTomorrowSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                // Combined Partner Selection: Single Text Box (Autocomplete + Dropdown)
+                Flexible(
+                  flex: 1,
+                  child: Stack(
+                    alignment: Alignment.centerRight,
+                    children: [
+                      // Autocomplete text box
+                      Autocomplete<String>(
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          // Check if the current user is a manager
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<String>.empty();
+                          }
+                          return suggestionsList.where((String option) {
+                            return option
+                                .toLowerCase()
+                                .contains(textEditingValue.text.toLowerCase());
+                          });
+                        },
+                        onSelected: (String selection) {
+                          setState(() {
+                            selectedPartner = selection;
+                            _partnerController.text =
+                                selection; // Update the text box with the selected partner
+                          });
+                        },
+                        fieldViewBuilder: (BuildContext context,
+                            TextEditingController fieldTextEditingController,
+                            FocusNode fieldFocusNode,
+                            VoidCallback onFieldSubmitted) {
+                          _partnerController =
+                              fieldTextEditingController; // Link the controller with the text field
+                          return TextField(
+                            controller: _partnerController,
+                            focusNode: fieldFocusNode,
+                            decoration: InputDecoration(
+                              hintText: "שותף",
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.arrow_drop_down),
+                                onPressed: () {
+                                  // Show a drop-down menu with the last 5 partners when the icon is clicked
+                                  showMenu<String>(
+                                    context: context,
+                                    position:
+                                        RelativeRect.fromLTRB(0, 40, 0, 0),
+                                    items: lastSelectedPartners
+                                        .map((String partner) {
+                                      return PopupMenuItem<String>(
+                                        value: partner,
+                                        child: Text(partner),
+                                      );
+                                    }).toList(),
+                                  ).then((String? newValue) {
+                                    if (newValue != null) {
+                                      if (newValue == "הזמנת מנהל") {
+                                        // Open a new window to input a custom message when "הזמנת מנהל" is selected
+                                        _showCustomMessageDialog(context)
+                                            .then((customMessage) {
+                                          if (customMessage != null &&
+                                              customMessage.isNotEmpty) {
+                                            setState(() {
+                                              selectedPartner =
+                                                  customMessage; // Use the custom message as the selected partner
+                                              _partnerController.text =
+                                                  customMessage; // Display it in the text box
+                                            });
+                                          }
+                                        });
+                                      } else {
+                                        // If any other partner is selected, use it as the selected partner
+                                        setState(() {
+                                          selectedPartner = newValue;
+                                          _partnerController.text =
+                                              newValue; // Update the text box with the selected value
+                                        });
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (BuildContext context,
+                            AutocompleteOnSelected<String> onSelected,
+                            Iterable<String> options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              child: Container(
+                                width: 300,
+                                height: 200,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.all(10.0),
+                                  itemCount: options.length,
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                    final String option =
+                                        options.elementAt(index);
+                                    return GestureDetector(
+                                      onTap: () {
+                                        onSelected(option);
+                                      },
+                                      child: ListTile(
+                                        title: Text(option),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
-// Combined Partner Selection: Single Text Box (Autocomplete + Dropdown)
-              Flexible(
-                flex: 1,
-                child: Stack(
-                  alignment: Alignment.centerRight,
-                  children: [
-                    // Autocomplete text box
-                    Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        // Check if the current user is a manager
-                        if (textEditingValue.text.isEmpty) {
-                          return const Iterable<String>.empty();
-                        }
-                        return suggestionsList.where((String option) {
-                          return option
-                              .toLowerCase()
-                              .contains(textEditingValue.text.toLowerCase());
-                        });
-                      },
-                      onSelected: (String selection) {
-                        setState(() {
-                          selectedPartner = selection;
-                          _partnerController.text =
-                              selection; // Update the text box with the selected partner
-                        });
-                      },
-                      fieldViewBuilder: (BuildContext context,
-                          TextEditingController fieldTextEditingController,
-                          FocusNode fieldFocusNode,
-                          VoidCallback onFieldSubmitted) {
-                        _partnerController =
-                            fieldTextEditingController; // Link the controller with the text field
-                        return TextField(
-                          controller: _partnerController,
-                          focusNode: fieldFocusNode,
-                          decoration: InputDecoration(
-                            hintText: "הכנס שם שותף",
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.arrow_drop_down),
-                              onPressed: () {
-                                // Show a drop-down menu with the last 5 partners when the icon is clicked
-                                showMenu<String>(
-                                  context: context,
-                                  position: RelativeRect.fromLTRB(0, 40, 0,
-                                      0), // Positioning of the dropdown
-                                  items: lastSelectedPartners
-                                      .map((String partner) {
-                                    return PopupMenuItem<String>(
-                                      value: partner,
-                                      child: Text(partner),
-                                    );
-                                  }).toList(),
-                                ).then((String? newValue) {
-                                  if (newValue != null) {
-                                    if (newValue == "הזמנת מנהל") {
-                                      // Open a new window to input a custom message when "הזמנת מנהל" is selected
-                                      _showCustomMessageDialog(context)
-                                          .then((customMessage) {
-                                        if (customMessage != null &&
-                                            customMessage.isNotEmpty) {
-                                          setState(() {
-                                            selectedPartner =
-                                                customMessage; // Use the custom message as the selected partner
-                                            _partnerController.text =
-                                                customMessage; // Display it in the text box
-                                          });
-                                        }
-                                      });
-                                    } else {
-                                      // If any other partner is selected, use it as the selected partner
-                                      setState(() {
-                                        selectedPartner = newValue;
-                                        _partnerController.text =
-                                            newValue; // Update the text box with the selected value
-                                      });
-                                    }
-                                  }
-                                });
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                      optionsViewBuilder: (BuildContext context,
-                          AutocompleteOnSelected<String> onSelected,
-                          Iterable<String> options) {
-                        return Align(
-                          alignment: Alignment.topLeft,
-                          child: Material(
-                            child: Container(
-                              width: 300,
-                              height: 200,
-                              child: ListView.builder(
-                                padding: const EdgeInsets.all(10.0),
-                                itemCount: options.length,
-                                itemBuilder: (BuildContext context, int index) {
-                                  final String option =
-                                      options.elementAt(index);
-                                  return GestureDetector(
-                                    onTap: () {
-                                      onSelected(option);
-                                    },
-                                    child: ListTile(
-                                      title: Text(option),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Consumer<ApplicationState>(
-            builder: (context, appState, _) {
-              fetchMyUserName();
-              return CourtReservations(
-                selectedDate: selectedDate ?? DateTime.now(),
-                selectedPartner: selectedPartner ?? '',
-                myUserName: myUserName,
-              );
-            },
+          const SizedBox(height: 8),
+          Expanded(
+            child: Consumer<ApplicationState>(
+              builder: (context, appState, _) {
+                fetchMyUserName();
+                return CourtReservations(
+                  selectedDate: selectedDate ?? DateTime.now(),
+                  selectedPartner: selectedPartner ?? '',
+                  myUserName: myUserName,
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -552,6 +572,23 @@ class _HomepageState extends State<HomePage> {
             },
           ),
         ),
+
+      // Exit option
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.red),
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.red[50],
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: ListTile(
+          leading: const Icon(Icons.close, color: Colors.red),
+          title: const Text('יציאה', style: TextStyle(color: Colors.red)),
+          onTap: () {
+            SystemNavigator.pop();
+          },
+        ),
+      ),
     ]));
   }
 }
