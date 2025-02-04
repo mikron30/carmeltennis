@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'reservation.dart';
 import 'reservation_manager.dart';
 import 'package:intl/intl.dart';
-import 'email_service.dart';
 import 'user_manager.dart';
 
 class CourtReservations extends StatefulWidget {
@@ -446,6 +445,8 @@ class CourtReservationsState extends State<CourtReservations> {
                 if (!isManager &&
                     hour >= 18 &&
                     hour <= 20 &&
+                    widget.selectedDate.weekday != DateTime.friday &&
+                    widget.selectedDate.weekday != DateTime.saturday &&
                     (!canReserveMe || !canReservepartner)) {
                   // Show an error message if the user exceeded the weekly limit
                   showDialog(
@@ -492,21 +493,6 @@ class CourtReservationsState extends State<CourtReservations> {
                 await updateLastFivePartners(
                     user.email!, widget.selectedPartner!.trim());
                 // After storing the reservation and updating partners, send the email
-                String originatorEmail = user.email!;
-                String originatorName = widget.myUserName!;
-                String partnerName = widget.selectedPartner!.trim();
-                String? partnerEmail =
-                    await UserManager.instance.getEmailByUsername(partnerName);
-                if (partnerEmail != null) {
-                  await sendEmailToBoth(
-                    originatorEmail: originatorEmail,
-                    originatorName: originatorName,
-                    partnerEmail: partnerEmail,
-                    partnerName: partnerName,
-                    date: selectedDate,
-                    hour: hour,
-                  );
-                }
               }
             }
           } else {
