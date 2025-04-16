@@ -1,14 +1,10 @@
-// Copyright 2022 The Flutter Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Import for SystemNavigator.pop()
+import 'package:flutter/services.dart'; // For SystemNavigator.pop()
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart'; // Import GoRouter
+import 'package:go_router/go_router.dart'; // For GoRouter
 
 import 'app_state.dart';
 import 'court_reservation.dart';
@@ -16,7 +12,7 @@ import 'date_selection.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
 import 'hoilday.dart';
-import 'package:intl/intl.dart'; // Import the intl package for date formatting
+import 'package:intl/intl.dart'; // For date formatting
 import 'users_management.dart';
 
 class HomePage extends StatefulWidget {
@@ -31,18 +27,86 @@ class _HomepageState extends State<HomePage> {
   DateTime? selectedDate;
   String? selectedPartner;
   List<String> suggestionsList = []; // Assuming this is populated elsewhere
-  TextEditingController _partnerController =
-      TextEditingController(); // Add controller
-  List<String> allUsers = []; // This should be fetched from your backend
+  TextEditingController _partnerController = TextEditingController();
+  List<String> allUsers = []; // Fetched from your backend
   List<String> lastSelectedPartners =
-      []; // This should be fetched from SharedPreferences or similar
+      []; // Fetched from SharedPreferences or similar
   String? myUserName;
 
   bool isTodaySelected = true; // Default to "Today" being selected
   bool isTomorrowSelected = false; // Initially, tomorrow is not selected
 
+  // New variable for email notifications preference
+  bool _receiveEmails = false;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedDate = DateTime.now();
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user != null) {
+      // Load the email preference for the user
+      _loadEmailPreference();
+
+      // Fetch the user name before fetching the last 5 partners
+      fetchMyUserName().then((_) {
+        setState(() {
+          // Rebuild the UI after the username is fetched
+        });
+
+        // Fetch the last 5 reserved partners after the username has been fetched
+        fetchLastFivePartners(user.email!).then((partners) {
+          setState(() {
+            lastSelectedPartners = partners;
+          });
+        });
+        // Fetch all users
+        fetchAllUsers();
+      });
+    }
+  }
+
+  /// Loads the user's email notification preference from Firestore.
+  Future<void> _loadEmailPreference() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      String email = user.email!;
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('users_2024')
+          .where('מייל', isEqualTo: email)
+          .get();
+      if (querySnapshot.docs.isNotEmpty) {
+        Map<String, dynamic> data =
+            querySnapshot.docs.first.data() as Map<String, dynamic>;
+        bool pref = data['receiveReservationEmails'] ?? false;
+        setState(() {
+          _receiveEmails = pref;
+        });
+      }
+    }
+  }
+
+  /// Toggles the email notification preference and updates Firestore.
+  Future<void> _toggleEmailPreference(bool newValue) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      String userEmail = user.email!;
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('users_2024')
+          .where('מייל', isEqualTo: userEmail)
+          .get();
+      if (querySnapshot.docs.isNotEmpty) {
+        DocumentReference docRef = querySnapshot.docs.first.reference;
+        await docRef.update({'receiveReservationEmails': newValue});
+        setState(() {
+          _receiveEmails = newValue;
+        });
+      }
+    }
+  }
+
   void updateSelectedDate(BuildContext context, DateTime newDate) {
-    // Normalize both dates to midnight (00:00:00) for comparison
     DateTime today = DateTime.now();
     DateTime normalizedToday = DateTime(today.year, today.month, today.day);
     DateTime normalizedNewDate =
@@ -50,13 +114,10 @@ class _HomepageState extends State<HomePage> {
 
     setState(() {
       selectedDate = newDate;
-
       if (normalizedNewDate.isAtSameMomentAs(normalizedToday)) {
-        // "Today" selected
         isTodaySelected = true;
         isTomorrowSelected = false;
       } else {
-        // "Tomorrow" selected
         isTodaySelected = false;
         isTomorrowSelected = true;
       }
@@ -65,43 +126,30 @@ class _HomepageState extends State<HomePage> {
 
   void fetchAllUsers() async {
     try {
-      // Wait for FirebaseAuth to restore the user if not already available
       User? currentUser = FirebaseAuth.instance.currentUser;
-
-      // If the current user is null, wait a moment and re-check
       if (currentUser == null) {
-        await Future.delayed(Duration(seconds: 1)); // Add a small delay
+        await Future.delayed(Duration(seconds: 1));
         currentUser = FirebaseAuth.instance.currentUser;
       }
-
-      // If email is still null, exit the function
       if (currentUser?.email == null) {
         print("User email is null. Unable to fetch users.");
         return;
       }
-
       String userEmail = currentUser!.email!;
-
-      // Fetch username if it's null
       if (myUserName == null) {
         myUserName = await UserManager.instance.getUsernameByEmail(userEmail);
       }
-
       QuerySnapshot querySnapshot =
           await FirebaseFirestore.instance.collection('users_2024').get();
-
       List<String> fetchedUsers = querySnapshot.docs.map((doc) {
         String firstName = doc['שם פרטי'];
         String lastName = doc['שם משפחה'];
         return '$firstName $lastName'.trim();
       }).toList();
-
-      // Remove current user's name if not a manager
       if (!isManager && myUserName != null) {
         fetchedUsers.removeWhere((userName) =>
             userName.trim().toLowerCase() == myUserName?.trim().toLowerCase());
       }
-
       setState(() {
         suggestionsList = fetchedUsers;
       });
@@ -111,26 +159,21 @@ class _HomepageState extends State<HomePage> {
   }
 
   Future<List<String>> fetchLastFivePartners(String userEmail) async {
-    // Query the users_2024 collection for the document with the matching 'מייל' field
     QuerySnapshot querySnapshot = await FirebaseFirestore.instance
         .collection('users_2024')
-        .where('מייל', isEqualTo: userEmail) // Query by the 'מייל' field
+        .where('מייל', isEqualTo: userEmail)
         .get();
     List<String> lastFivePartners = [];
-
-    // If the document exists, fetch the 'lastFivePartners' field
     if (querySnapshot.docs.isNotEmpty) {
       DocumentSnapshot userDoc = querySnapshot.docs.first;
       if (userDoc.exists && userDoc.data() != null) {
         try {
           Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
-          // Return the list of last 5 partners or an empty list if not found
           lastFivePartners = List<String>.from(data['lastFivePartners'] ?? []);
           lastFivePartners = lastFivePartners.map((partner) {
             return partner.startsWith('!') ? partner.substring(1) : partner;
           }).toList();
         } catch (e) {
-          // Return an empty list if 'lastFivePartners' field does not exist
           lastFivePartners = [];
         }
       }
@@ -138,7 +181,6 @@ class _HomepageState extends State<HomePage> {
     if (isManager) {
       lastFivePartners.add("הזמנת מנהל");
     }
-
     return lastFivePartners;
   }
 
@@ -158,7 +200,6 @@ class _HomepageState extends State<HomePage> {
 
   Future<String?> _showCustomMessageDialog(BuildContext context) async {
     TextEditingController messageController = TextEditingController();
-
     return await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -172,14 +213,13 @@ class _HomepageState extends State<HomePage> {
             TextButton(
               child: const Text('ביטול'),
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog without saving
+                Navigator.of(context).pop();
               },
             ),
             TextButton(
               child: const Text('אישור'),
               onPressed: () {
-                Navigator.of(context).pop(
-                    '!' + messageController.text); // Return the entered message
+                Navigator.of(context).pop('!' + messageController.text);
               },
             ),
           ],
@@ -189,84 +229,55 @@ class _HomepageState extends State<HomePage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    selectedDate = DateTime.now();
-    final User? user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-      // Fetch the user name before fetching the last 5 partners
-      fetchMyUserName().then((_) {
-        setState(() {
-          // Rebuild the UI after the username is fetched
-        });
-
-        // Now fetch the last 5 reserved partners after the username has been fetched
-        fetchLastFivePartners(user.email!).then((partners) {
-          setState(() {
-            lastSelectedPartners = partners; // Store the fetched partners
-          });
-        });
-        // Fetch all users
-        fetchAllUsers();
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
     final bool loggedIn = user != null;
 
     return Scaffold(
-      // No AppBar as per your previous request
-      body: loggedIn
-          ? _buildMainContent() // Show main content if logged in
-          : _buildLoginScreen(), // Show login prompt if not logged in
-
-      // Show drawer only if logged in
+      body: loggedIn ? _buildMainContent() : _buildLoginScreen(),
       drawer: loggedIn ? _buildDrawer() : null,
     );
   }
 
-// Function to build the main content (when user is logged in)
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Widget _buildMainContent() {
-    // Get today's and tomorrow's dates in dd/MM/yyyy format
     DateTime today = DateTime.now();
     DateTime tomorrow = today.add(const Duration(days: 1));
     String formattedToday = DateFormat('dd').format(today);
     String formattedTomorrow = DateFormat('dd').format(tomorrow);
     return GestureDetector(
       onHorizontalDragEnd: (details) {
-        setState(() {
-          if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
-            // Swipe right: increment date by 1 day
-            selectedDate = (selectedDate ?? today).add(const Duration(days: 1));
-          } else if (details.primaryVelocity != null &&
-              details.primaryVelocity! < 0) {
-            // Swipe left: decrement date by 1 day
-            selectedDate =
-                (selectedDate ?? today).subtract(const Duration(days: 1));
-          }
-        });
+        final today = DateTime.now();
+        final tomorrow = today.add(const Duration(days: 1));
 
-        // Update "Today" and "Tomorrow" button states
-        updateSelectedDate(context, selectedDate!);
+        if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
+          // Swipe Right → go to tomorrow
+          if (_isSameDay(selectedDate ?? today, today)) {
+            updateSelectedDate(context, tomorrow);
+          }
+        } else if (details.primaryVelocity != null &&
+            details.primaryVelocity! < 0) {
+          // Swipe Left → go to today
+          if (_isSameDay(selectedDate ?? today, tomorrow)) {
+            updateSelectedDate(context, today);
+          }
+        }
       },
       child: Column(
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.all(8.0), // Add some padding
+            padding: const EdgeInsets.all(8.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Use a Builder to get the correct context for opening the drawer
                 Builder(
                   builder: (BuildContext context) {
                     return IconButton(
                       icon: const Icon(Icons.menu),
                       onPressed: () {
-                        // Open the drawer
                         Scaffold.of(context).openDrawer();
                       },
                       color: isManager ? Colors.red : null,
@@ -274,7 +285,6 @@ class _HomepageState extends State<HomePage> {
                   },
                 ),
                 const SizedBox(width: 8),
-                // Conditional display based on the username
                 if (isManager) ...[
                   Flexible(
                     flex: 1,
@@ -289,7 +299,6 @@ class _HomepageState extends State<HomePage> {
                     flex: 1,
                     child: Row(
                       children: [
-                        // Button for "היום" (Today)
                         Flexible(
                           child: ElevatedButton(
                             onPressed: () {
@@ -306,8 +315,6 @@ class _HomepageState extends State<HomePage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-
-                        // Button for "מחר" (Tomorrow)
                         Flexible(
                           child: ElevatedButton(
                             onPressed: () {
@@ -328,16 +335,13 @@ class _HomepageState extends State<HomePage> {
                   ),
                 ],
                 const SizedBox(width: 8),
-                // Combined Partner Selection: Single Text Box (Autocomplete + Dropdown)
                 Flexible(
                   flex: 1,
                   child: Stack(
                     alignment: Alignment.centerRight,
                     children: [
-                      // Autocomplete text box
                       Autocomplete<String>(
                         optionsBuilder: (TextEditingValue textEditingValue) {
-                          // Check if the current user is a manager
                           if (textEditingValue.text.isEmpty) {
                             return const Iterable<String>.empty();
                           }
@@ -350,16 +354,14 @@ class _HomepageState extends State<HomePage> {
                         onSelected: (String selection) {
                           setState(() {
                             selectedPartner = selection;
-                            _partnerController.text =
-                                selection; // Update the text box with the selected partner
+                            _partnerController.text = selection;
                           });
                         },
                         fieldViewBuilder: (BuildContext context,
                             TextEditingController fieldTextEditingController,
                             FocusNode fieldFocusNode,
                             VoidCallback onFieldSubmitted) {
-                          _partnerController =
-                              fieldTextEditingController; // Link the controller with the text field
+                          _partnerController = fieldTextEditingController;
                           return TextField(
                             controller: _partnerController,
                             focusNode: fieldFocusNode,
@@ -368,7 +370,6 @@ class _HomepageState extends State<HomePage> {
                               suffixIcon: IconButton(
                                 icon: const Icon(Icons.arrow_drop_down),
                                 onPressed: () {
-                                  // Show a drop-down menu with the last 5 partners when the icon is clicked
                                   showMenu<String>(
                                     context: context,
                                     position:
@@ -383,25 +384,21 @@ class _HomepageState extends State<HomePage> {
                                   ).then((String? newValue) {
                                     if (newValue != null) {
                                       if (newValue == "הזמנת מנהל") {
-                                        // Open a new window to input a custom message when "הזמנת מנהל" is selected
                                         _showCustomMessageDialog(context)
                                             .then((customMessage) {
                                           if (customMessage != null &&
                                               customMessage.isNotEmpty) {
                                             setState(() {
-                                              selectedPartner =
-                                                  customMessage; // Use the custom message as the selected partner
+                                              selectedPartner = customMessage;
                                               _partnerController.text =
-                                                  customMessage; // Display it in the text box
+                                                  customMessage;
                                             });
                                           }
                                         });
                                       } else {
-                                        // If any other partner is selected, use it as the selected partner
                                         setState(() {
                                           selectedPartner = newValue;
-                                          _partnerController.text =
-                                              newValue; // Update the text box with the selected value
+                                          _partnerController.text = newValue;
                                         });
                                       }
                                     }
@@ -466,7 +463,6 @@ class _HomepageState extends State<HomePage> {
     );
   }
 
-// Function to show the login screen if not logged in
   Widget _buildLoginScreen() {
     return Center(
       child: Column(
@@ -478,11 +474,10 @@ class _HomepageState extends State<HomePage> {
           ),
           const SizedBox(height: 20),
           AuthFunc(
-            // Use the AuthFunc widget for login handling
             loggedIn: false,
             signOut: () async {
               await FirebaseAuth.instance.signOut();
-              setState(() {}); // Rebuild after logout
+              setState(() {});
             },
           ),
         ],
@@ -490,105 +485,123 @@ class _HomepageState extends State<HomePage> {
     );
   }
 
-// Function to build the drawer (if logged in)
+  /// Build the drawer including the new email notification checkbox.
   Widget _buildDrawer() {
     return Drawer(
-        child: ListView(padding: EdgeInsets.zero, children: [
-      // Removed the DrawerHeader with "שלום ..."
-
-      // Auth function for signing out
-      Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.blue),
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.blue[50],
-        ),
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: ListTile(
-          leading: const Icon(Icons.exit_to_app, color: Colors.blue),
-          title: const Text('התנתק', style: TextStyle(color: Colors.blue)),
-          onTap: () async {
-            await FirebaseAuth.instance.signOut();
-            setState(() {});
-            Navigator.of(context).pop();
-          },
-        ),
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // Email Notification Preference Checkbox
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.blue),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.blue[50],
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: CheckboxListTile(
+              value: _receiveEmails,
+              title: const Text('אפשר קבלת מייל',
+                  style: TextStyle(color: Colors.blue)),
+              controlAffinity: ListTileControlAffinity.leading,
+              onChanged: (bool? newValue) {
+                if (newValue != null) {
+                  _toggleEmailPreference(newValue);
+                }
+              },
+            ),
+          ),
+          // Sign out option
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.blue),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.blue[50],
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: ListTile(
+              leading: const Icon(Icons.exit_to_app, color: Colors.blue),
+              title: const Text('התנתק', style: TextStyle(color: Colors.blue)),
+              onTap: () async {
+                await FirebaseAuth.instance.signOut();
+                setState(() {});
+                Navigator.of(context).pop();
+              },
+            ),
+          ),
+          // Change Password option
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.blue),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.blue[50],
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: ListTile(
+              leading: const Icon(Icons.lock, color: Colors.blue),
+              title:
+                  const Text('שנה סיסמא', style: TextStyle(color: Colors.blue)),
+              onTap: () {
+                GoRouter.of(context).push('/change-password');
+              },
+            ),
+          ),
+          if (isManager)
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.blue),
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.blue[50],
+              ),
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              child: ListTile(
+                leading: const Icon(Icons.lock, color: Colors.blue),
+                title: const Text('ניהול חגים',
+                    style: TextStyle(color: Colors.blue)),
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => AddHolidayScreen()));
+                },
+              ),
+            ),
+          if (isManager)
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.blue),
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.blue[50],
+              ),
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              child: ListTile(
+                leading: const Icon(Icons.group, color: Colors.blue),
+                title: const Text('ניהול משתמשים',
+                    style: TextStyle(color: Colors.blue)),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (context) => ManageUsersScreen()),
+                  );
+                },
+              ),
+            ),
+          // Exit option
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.red),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.red[50],
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: ListTile(
+              leading: const Icon(Icons.close, color: Colors.red),
+              title: const Text('יציאה', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                SystemNavigator.pop();
+              },
+            ),
+          ),
+        ],
       ),
-
-      // Container for "שנה סיסמא" (Change Password)
-      Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.blue),
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.blue[50],
-        ),
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: ListTile(
-          leading: const Icon(Icons.lock, color: Colors.blue),
-          title: const Text('שנה סיסמא', style: TextStyle(color: Colors.blue)),
-          onTap: () {
-            GoRouter.of(context).push('/change-password');
-          },
-        ),
-      ),
-
-      if (isManager)
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.blue),
-            borderRadius: BorderRadius.circular(10),
-            color: Colors.blue[50],
-          ),
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: ListTile(
-            leading: const Icon(Icons.lock, color: Colors.blue),
-            title:
-                const Text('ניהול חגים', style: TextStyle(color: Colors.blue)),
-            onTap: () {
-              Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => AddHolidayScreen()));
-            },
-          ),
-        ),
-      // New "Manage Users" option
-      if (isManager)
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.blue),
-            borderRadius: BorderRadius.circular(10),
-            color: Colors.blue[50],
-          ),
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: ListTile(
-            leading: const Icon(Icons.group,
-                color: Colors.blue), // Choose a suitable icon
-            title: const Text('ניהול משתמשים',
-                style:
-                    TextStyle(color: Colors.blue)), // 'Manage Users' in Hebrew
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => ManageUsersScreen()),
-              );
-            },
-          ),
-        ),
-
-      // Exit option
-      Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.red),
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.red[50],
-        ),
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: ListTile(
-          leading: const Icon(Icons.close, color: Colors.red),
-          title: const Text('יציאה', style: TextStyle(color: Colors.red)),
-          onTap: () {
-            SystemNavigator.pop();
-          },
-        ),
-      ),
-    ]));
+    );
   }
 }

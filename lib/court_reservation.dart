@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'reservation.dart';
 import 'reservation_manager.dart';
 import 'package:intl/intl.dart';
+import 'email_service.dart';
 import 'user_manager.dart';
 
 class CourtReservations extends StatefulWidget {
@@ -347,15 +348,85 @@ class CourtReservationsState extends State<CourtReservations> {
               isManager) {
             try {
               if (isManager || (!isBeforeOrNow(reservationDateTime))) {
+                if (!isManager &&
+                    reservationDateTime.difference(DateTime.now()).inMinutes <
+                        30) {
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('שגיאה'),
+                        content: const Text(
+                            'לא ניתן למחוק הזמנה פחות מחצי שעה מראש'),
+                        actions: <Widget>[
+                          TextButton(
+                            child: const Text('אישור'),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                  return;
+                }
                 // Await confirmation dialog and check if widget is still mounted
                 bool confirmDelete =
                     await _showDeleteConfirmationDialog(context);
                 if (!mounted) return; // Check if still mounted after async call
                 if (confirmDelete) {
-                  // Check if the reservation time is in the past or the current hour
                   await firstDocument.reference.delete();
-                  courtsReservations[courtNumber - 1]
-                      [hour] = {'isReserved': false, 'userName': ''};
+                  courtsReservations[courtNumber - 1][hour] = {
+                    'isReserved': false,
+                    'userName': '',
+                    'partner': ''
+                  };
+
+                  String? partnerName = partnerUserName?.trim();
+                  String? originatorEmail = user.email!;
+                  String? originatorName = widget.myUserName ?? '';
+                  String? partnerEmail;
+
+                  if (partnerName != null &&
+                      partnerName.isNotEmpty &&
+                      !partnerName.startsWith('!')) {
+                    partnerEmail = await UserManager.instance
+                        .getEmailByUsername(partnerName);
+
+                    if (partnerEmail != null) {
+                      // Check if partner opted in for cancellation emails
+                      bool partnerWantsEmails = false;
+
+                      QuerySnapshot partnerQuerySnapshot =
+                          await FirebaseFirestore.instance
+                              .collection('users_2024')
+                              .where('מייל', isEqualTo: partnerEmail)
+                              .get();
+
+                      if (partnerQuerySnapshot.docs.isNotEmpty) {
+                        Map<String, dynamic> partnerData =
+                            partnerQuerySnapshot.docs.first.data()
+                                as Map<String, dynamic>;
+                        partnerWantsEmails =
+                            partnerData['receiveReservationEmails'] ?? false;
+                      }
+
+                      if (partnerWantsEmails) {
+                        int totalCourts =
+                            await _determineNumberOfCourts(selectedDate);
+                        int displayCourtNumber = totalCourts - courtNumber + 1;
+
+                        await sendReservationEmail(
+                            originatorEmail: originatorEmail,
+                            originatorName: originatorName,
+                            partnerEmail: partnerEmail,
+                            partnerName: partnerName,
+                            date: selectedDate,
+                            hour: hour,
+                            courtNumber: displayCourtNumber,
+                            isCancellation: true);
+                      }
+                    }
+                  }
                 }
               } else {
                 showDialog(
@@ -445,8 +516,6 @@ class CourtReservationsState extends State<CourtReservations> {
                 if (!isManager &&
                     hour >= 18 &&
                     hour <= 20 &&
-                    widget.selectedDate.weekday != DateTime.friday &&
-                    widget.selectedDate.weekday != DateTime.saturday &&
                     (!canReserveMe || !canReservepartner)) {
                   // Show an error message if the user exceeded the weekly limit
                   showDialog(
@@ -493,6 +562,46 @@ class CourtReservationsState extends State<CourtReservations> {
                 await updateLastFivePartners(
                     user.email!, widget.selectedPartner!.trim());
                 // After storing the reservation and updating partners, send the email
+                String originatorEmail = user.email!;
+                String originatorName = widget.myUserName!;
+                String partnerName = widget.selectedPartner!.trim();
+                String? partnerEmail =
+                    await UserManager.instance.getEmailByUsername(partnerName);
+                if (partnerEmail != null) {
+                  // Query Firestore to check the partner's email preference
+                  bool partnerWantsEmails = false;
+                  QuerySnapshot partnerQuerySnapshot = await FirebaseFirestore
+                      .instance
+                      .collection('users_2024')
+                      .where('מייל', isEqualTo: partnerEmail)
+                      .get();
+                  if (partnerQuerySnapshot.docs.isNotEmpty) {
+                    Map<String, dynamic> partnerData =
+                        partnerQuerySnapshot.docs.first.data()
+                            as Map<String, dynamic>;
+                    partnerWantsEmails =
+                        partnerData['receiveReservationEmails'] ?? false;
+                  }
+
+                  // Only send the email if the partner has opted to receive reservation emails
+                  if (partnerWantsEmails) {
+                    // Determine the total number of courts for the selected date
+                    int totalCourts =
+                        await _determineNumberOfCourts(selectedDate);
+                    // Compute the display court number based on the total number of courts
+                    int displayCourtNumber = totalCourts - courtNumber + 1;
+
+                    await sendReservationEmail(
+                        originatorEmail: originatorEmail,
+                        originatorName: originatorName,
+                        partnerEmail: partnerEmail,
+                        partnerName: partnerName,
+                        date: selectedDate,
+                        hour: hour,
+                        courtNumber: displayCourtNumber,
+                        isCancellation: false);
+                  }
+                }
               }
             }
           } else {
@@ -714,8 +823,8 @@ class CourtReservationsState extends State<CourtReservations> {
       hour,
     );
 
-    // Disable the button if the date/time is in the past
-    bool isPast = reservationDateTime.isBefore(now);
+    bool isWithin30Minutes = reservationDateTime.difference(now).inMinutes < 30;
+    bool isPast = reservationDateTime.isBefore(now) || isWithin30Minutes;
 
     bool isMine = longUserName == widget.myUserName ||
         longPartnerName == widget.myUserName;
@@ -746,6 +855,8 @@ class CourtReservationsState extends State<CourtReservations> {
                   return; // Do nothing if the slot is reserved by someone else
                 }
                 // Proceed with reservation if conditions are valid
+                //print(" reservation ${courtIndex}");
+
                 _reserve(courtIndex + 1, hour);
               },
         style: ElevatedButton.styleFrom(
