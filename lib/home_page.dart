@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For SystemNavigator.pop()
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart'; // For GoRouter
 
@@ -584,22 +583,6 @@ class _HomepageState extends State<HomePage> {
                 },
               ),
             ),
-          // Exit option
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.red),
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.red[50],
-            ),
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            child: ListTile(
-              leading: const Icon(Icons.close, color: Colors.red),
-              title: const Text('יציאה', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                SystemNavigator.pop();
-              },
-            ),
-          ),
         ],
       ),
     );
