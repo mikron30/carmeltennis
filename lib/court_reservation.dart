@@ -288,6 +288,23 @@ class CourtReservationsState extends State<CourtReservations> {
         reservationDateTime.isAtSameMomentAs(currentDateTime);
   }
 
+  Future<bool> doesUserWantEmails(String email) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users_2024')
+          .where('מייל', isEqualTo: email)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        return data['receiveReservationEmails'] ?? false;
+      }
+    } catch (e) {
+      print("❌ Error checking email preferences for $email: $e");
+    }
+    return false;
+  }
+
   void _reserve(int courtNumber, int hour) async {
     final User? user = FirebaseAuth.instance.currentUser;
     DateTime selectedDate = widget.selectedDate;
@@ -381,52 +398,34 @@ class CourtReservationsState extends State<CourtReservations> {
                     'partner': ''
                   };
 
-                  String? partnerName = partnerUserName?.trim();
-                  String? originatorEmail = user.email!;
-                  String? originatorName = widget.myUserName ?? '';
-                  String? partnerEmail;
+                  int totalCourts =
+                      await _determineNumberOfCourts(selectedDate);
+                  int displayCourtNumber = totalCourts - courtNumber + 1;
 
-                  if (partnerName != null &&
-                      partnerName.isNotEmpty &&
-                      !partnerName.startsWith('!')) {
-                    partnerEmail = await UserManager.instance
-                        .getEmailByUsername(partnerName);
+                  final originatorEmail = user.email!;
+                  final originatorName = widget.myUserName ?? '';
+                  final partnerName = partnerUserName?.trim() ?? '';
+                  final partnerEmail = await UserManager.instance
+                      .getEmailByUsername(partnerName);
 
-                    if (partnerEmail != null) {
-                      // Check if partner opted in for cancellation emails
-                      bool partnerWantsEmails = false;
+                  final originatorWantsEmail =
+                      await doesUserWantEmails(originatorEmail);
+                  final partnerWantsEmail = partnerEmail != null
+                      ? await doesUserWantEmails(partnerEmail)
+                      : false;
 
-                      QuerySnapshot partnerQuerySnapshot =
-                          await FirebaseFirestore.instance
-                              .collection('users_2024')
-                              .where('מייל', isEqualTo: partnerEmail)
-                              .get();
-
-                      if (partnerQuerySnapshot.docs.isNotEmpty) {
-                        Map<String, dynamic> partnerData =
-                            partnerQuerySnapshot.docs.first.data()
-                                as Map<String, dynamic>;
-                        partnerWantsEmails =
-                            partnerData['receiveReservationEmails'] ?? false;
-                      }
-
-                      if (partnerWantsEmails) {
-                        int totalCourts =
-                            await _determineNumberOfCourts(selectedDate);
-                        int displayCourtNumber = totalCourts - courtNumber + 1;
-
-                        await sendReservationEmail(
-                            originatorEmail: originatorEmail,
-                            originatorName: originatorName,
-                            partnerEmail: partnerEmail,
-                            partnerName: partnerName,
-                            date: selectedDate,
-                            hour: hour,
-                            courtNumber: displayCourtNumber,
-                            isCancellation: true);
-                      }
-                    }
-                  }
+                  await sendReservationEmails(
+                    originatorEmail: originatorEmail,
+                    originatorName: originatorName,
+                    originatorWantsEmail: originatorWantsEmail,
+                    partnerEmail: partnerEmail ?? '',
+                    partnerName: partnerName,
+                    partnerWantsEmail: partnerWantsEmail,
+                    courtNumber: displayCourtNumber,
+                    date: selectedDate,
+                    hour: hour,
+                    isCancellation: true,
+                  );
                 }
               } else {
                 showDialog(
@@ -561,47 +560,35 @@ class CourtReservationsState extends State<CourtReservations> {
                 // Update the last 5 partners after the reservation is saved
                 await updateLastFivePartners(
                     user.email!, widget.selectedPartner!.trim());
-                // After storing the reservation and updating partners, send the email
-                String originatorEmail = user.email!;
-                String originatorName = widget.myUserName!;
-                String partnerName = widget.selectedPartner!.trim();
-                String? partnerEmail =
+
+                int totalCourts = await _determineNumberOfCourts(selectedDate);
+                int displayCourtNumber = totalCourts - courtNumber + 1;
+
+                final originatorEmail = user.email!;
+                final originatorName = widget.myUserName ?? '';
+                final partnerName = widget.selectedPartner?.trim() ?? '';
+                final partnerEmail =
                     await UserManager.instance.getEmailByUsername(partnerName);
-                if (partnerEmail != null) {
-                  // Query Firestore to check the partner's email preference
-                  bool partnerWantsEmails = false;
-                  QuerySnapshot partnerQuerySnapshot = await FirebaseFirestore
-                      .instance
-                      .collection('users_2024')
-                      .where('מייל', isEqualTo: partnerEmail)
-                      .get();
-                  if (partnerQuerySnapshot.docs.isNotEmpty) {
-                    Map<String, dynamic> partnerData =
-                        partnerQuerySnapshot.docs.first.data()
-                            as Map<String, dynamic>;
-                    partnerWantsEmails =
-                        partnerData['receiveReservationEmails'] ?? false;
-                  }
 
-                  // Only send the email if the partner has opted to receive reservation emails
-                  if (partnerWantsEmails) {
-                    // Determine the total number of courts for the selected date
-                    int totalCourts =
-                        await _determineNumberOfCourts(selectedDate);
-                    // Compute the display court number based on the total number of courts
-                    int displayCourtNumber = totalCourts - courtNumber + 1;
+                // בדיקת העדפות מייל
+                final originatorWantsEmail =
+                    await doesUserWantEmails(originatorEmail);
+                final partnerWantsEmail = partnerEmail != null
+                    ? await doesUserWantEmails(partnerEmail)
+                    : false;
 
-                    await sendReservationEmail(
-                        originatorEmail: originatorEmail,
-                        originatorName: originatorName,
-                        partnerEmail: partnerEmail,
-                        partnerName: partnerName,
-                        date: selectedDate,
-                        hour: hour,
-                        courtNumber: displayCourtNumber,
-                        isCancellation: false);
-                  }
-                }
+                await sendReservationEmails(
+                  originatorEmail: originatorEmail,
+                  originatorName: originatorName,
+                  originatorWantsEmail: originatorWantsEmail,
+                  partnerEmail: partnerEmail ?? '',
+                  partnerName: partnerName,
+                  partnerWantsEmail: partnerWantsEmail,
+                  courtNumber: displayCourtNumber,
+                  date: selectedDate,
+                  hour: hour,
+                  isCancellation: false,
+                );
               }
             }
           } else {
@@ -835,8 +822,9 @@ class CourtReservationsState extends State<CourtReservations> {
         widget.myUserName == "מועדון כרמל";
 
     // Using null-aware operators for safety
-    if (((widget.selectedDate.weekday == DateTime.friday ||
-            (holidayType != null && holidayType == "ערב חג"))) &&
+    if ((holidayType != null && holidayType != "חג") &&
+        (widget.selectedDate.weekday == DateTime.friday ||
+            (holidayType != null && holidayType == "ערב חג")) &&
         (hour >= 7 && hour <= 18) &&
         courtIndex == 0) {
       return ElevatedButton(

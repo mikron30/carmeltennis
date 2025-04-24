@@ -90,7 +90,98 @@ String buildReservationEmailHtml({
 ''';
 }
 
-Future<void> sendReservationEmail({
+Future<void> sendReservationEmails({
+  required String originatorEmail,
+  required String originatorName,
+  required bool originatorWantsEmail,
+  required String? partnerEmail,
+  required String partnerName,
+  required bool partnerWantsEmail,
+  required DateTime date,
+  required int hour,
+  required int courtNumber,
+  required bool isCancellation,
+}) async {
+  final formattedDate = "${date.day}-${date.month}-${date.year}";
+  final formattedHour = hour.toString().padLeft(2, '0');
+
+  final subjectPrefix = isCancellation ? "ביטול הזמנה" : "אישור הזמנה";
+  final subject =
+      "$subjectPrefix - $originatorName, $partnerName - $formattedDate $formattedHour:00 - מגרש $courtNumber";
+
+  final html = buildReservationEmailHtml(
+    originatorName: originatorName,
+    partnerName: partnerName,
+    formattedDate: formattedDate,
+    formattedHour: formattedHour,
+    courtNumber: courtNumber,
+    isCancellation: isCancellation,
+  );
+
+  final dio = Dio(BaseOptions(
+    baseUrl: "https://email-service-496722208859.us-central1.run.app/sendMail",
+    receiveDataWhenStatusError: true,
+    connectTimeout: const Duration(seconds: 120),
+    receiveTimeout: const Duration(seconds: 120),
+    headers: {
+      HttpHeaders.contentTypeHeader: "application/json",
+    },
+  ));
+
+// שלח ליוזם אם הוא רוצה
+  if (originatorWantsEmail) {
+    try {
+      await dio.post("", data: {
+        "to": originatorEmail,
+        "subject": subject,
+        "html": html,
+      });
+    } catch (e) {
+      print("❌ Failed to send to originator: $e");
+    }
+  }
+
+// שלח לשותף אם הוא רוצה
+  if (partnerWantsEmail && partnerEmail != null && partnerEmail.isNotEmpty) {
+    try {
+      await dio.post("", data: {
+        "to": partnerEmail,
+        "subject": subject,
+        "html": html,
+      });
+    } catch (e) {
+      print("❌ Failed to send to partner: $e");
+    }
+  }
+
+// אם אף אחד מהם לא רצה – שלח רק אליך
+  if (!originatorWantsEmail && !partnerWantsEmail) {
+    try {
+      await dio.post("", data: {
+        "to": "mikron30@gmail.com",
+        "subject": subject,
+        "html": html,
+      });
+    } catch (e) {
+      print("❌ Failed to send to mikron30 (fallback only): $e");
+    }
+  } else {
+    // תמיד שלח גם אליך בנוסף
+    try {
+      await dio.post("", data: {
+        "to": "mikron30@gmail.com",
+        "subject": subject,
+        "html": html,
+      });
+    } catch (e) {
+      print("❌ Failed to send to mikron30 (in addition): $e");
+    }
+  }
+}
+
+Future<void> notifyUsersByEmail({
+  required bool toOriginator,
+  required bool toPartner,
   required String originatorEmail,
   required String originatorName,
   required String partnerEmail,
@@ -116,19 +207,11 @@ Future<void> sendReservationEmail({
     isCancellation: isCancellation,
   );
 
-  final data = {
-    "to": originatorEmail,
-    "cc": partnerEmail,
-    "bcc": "mikron30@gmail.com;beni@cohensys.com",
-    "subject": subject,
-    "html": message,
-  };
-
-  String url =
+  const String serviceUrl =
       "https://email-service-496722208859.us-central1.run.app/sendMail";
 
   Dio dio = Dio(BaseOptions(
-    baseUrl: url,
+    baseUrl: serviceUrl,
     receiveDataWhenStatusError: true,
     connectTimeout: const Duration(seconds: 120),
     receiveTimeout: const Duration(seconds: 120),
@@ -137,9 +220,26 @@ Future<void> sendReservationEmail({
     },
   ));
 
-  try {
-    await dio.post(url, data: data);
-  } on DioException catch (e) {
-    print("❌ Failed to send email: ${e.message}");
+  Future<void> send(String email) async {
+    final data = {
+      "to": email,
+      "subject": subject,
+      "html": message,
+    };
+
+    try {
+      await dio.post(serviceUrl, data: data);
+    } catch (e) {
+      print("❌ Failed to send email to $email: $e");
+    }
+  }
+
+  // שלח לפי ההעדפות
+  if (toOriginator) await send(originatorEmail);
+  if (toPartner) await send(partnerEmail);
+
+  // אם אף אחד מהם לא רצה, שלח למיקי
+  if (!toOriginator && !toPartner) {
+    await send("mikron30@gmail.com");
   }
 }
