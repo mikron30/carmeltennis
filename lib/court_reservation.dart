@@ -305,6 +305,23 @@ class CourtReservationsState extends State<CourtReservations> {
     return false;
   }
 
+  Future<String> getReservationUserName(
+      String date, int courtNumber, int hour) async {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('reservations')
+        .where('date', isEqualTo: date)
+        .where('courtNumber', isEqualTo: courtNumber)
+        .where('hour', isEqualTo: hour)
+        .limit(1)
+        .get();
+
+    if (querySnapshot.docs.isNotEmpty) {
+      return querySnapshot.docs.first['userName'] ?? '';
+    }
+
+    return '';
+  }
+
   void _reserve(int courtNumber, int hour) async {
     final User? user = FirebaseAuth.instance.currentUser;
     DateTime selectedDate = widget.selectedDate;
@@ -391,13 +408,6 @@ class CourtReservationsState extends State<CourtReservations> {
                     await _showDeleteConfirmationDialog(context);
                 if (!mounted) return; // Check if still mounted after async call
                 if (confirmDelete) {
-                  await firstDocument.reference.delete();
-                  courtsReservations[courtNumber - 1][hour] = {
-                    'isReserved': false,
-                    'userName': '',
-                    'partner': ''
-                  };
-
                   int totalCourts =
                       await _determineNumberOfCourts(selectedDate);
                   int displayCourtNumber = totalCourts - courtNumber + 1;
@@ -405,7 +415,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   final originatorEmail = user.email!;
                   final originatorName = widget.myUserName ?? '';
                   final partnerName = partnerUserName?.trim() ?? '';
-                  final partnerEmail = await UserManager.instance
+                  String? partnerEmail = await UserManager.instance
                       .getEmailByUsername(partnerName);
 
                   final originatorWantsEmail =
@@ -413,19 +423,35 @@ class CourtReservationsState extends State<CourtReservations> {
                   final partnerWantsEmail = partnerEmail != null
                       ? await doesUserWantEmails(partnerEmail)
                       : false;
+                  String realPartnerName = partnerName;
+
+                  // If the partner and originator are the same, find first reservation user
+                  if (partnerName == originatorName) {
+                    realPartnerName = await getReservationUserName(
+                        formattedDate, courtNumber, hour);
+                    partnerEmail = await UserManager.instance
+                        .getEmailByUsername(realPartnerName);
+                  }
 
                   await sendReservationEmails(
                     originatorEmail: originatorEmail,
                     originatorName: originatorName,
                     originatorWantsEmail: originatorWantsEmail,
                     partnerEmail: partnerEmail ?? '',
-                    partnerName: partnerName,
+                    partnerName: realPartnerName,
                     partnerWantsEmail: partnerWantsEmail,
                     courtNumber: displayCourtNumber,
                     date: selectedDate,
                     hour: hour,
                     isCancellation: true,
                   );
+
+                  await firstDocument.reference.delete();
+                  courtsReservations[courtNumber - 1][hour] = {
+                    'isReserved': false,
+                    'userName': '',
+                    'partner': ''
+                  };
                 }
               } else {
                 showDialog(
