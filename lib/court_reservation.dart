@@ -541,6 +541,8 @@ class CourtReservationsState extends State<CourtReservations> {
                 if (!isManager &&
                     hour >= 18 &&
                     hour <= 20 &&
+                    selectedDate.weekday != DateTime.friday &&
+                    selectedDate.weekday != DateTime.saturday &&
                     (!canReserveMe || !canReservepartner)) {
                   // Show an error message if the user exceeded the weekly limit
                   showDialog(
