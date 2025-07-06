@@ -233,7 +233,7 @@ class CourtReservationsState extends State<CourtReservations> {
     DateTime startOfWeek = selectedDate.subtract(
       Duration(days: (selectedDate.weekday % 7)),
     );
-    DateTime endOfWeek = startOfWeek.add(Duration(days: 4)); // End on Thursday
+    DateTime endOfWeek = startOfWeek.add(Duration(days: 6)); // End on Thursday
 
     String startOfWeekFormatted = DateFormat('yyyy-MM-dd').format(startOfWeek);
     String endOfWeekFormatted = DateFormat('yyyy-MM-dd').format(endOfWeek);
@@ -541,8 +541,6 @@ class CourtReservationsState extends State<CourtReservations> {
                 if (!isManager &&
                     hour >= 18 &&
                     hour <= 20 &&
-                    selectedDate.weekday != DateTime.friday &&
-                    selectedDate.weekday != DateTime.saturday &&
                     (!canReserveMe || !canReservepartner)) {
                   // Show an error message if the user exceeded the weekly limit
                   showDialog(
