@@ -22,6 +22,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // ✅ Ensure user/email↔name mapping is ready for cold start
+  await UserManager.instance.fetchAndStoreUserMappings();
 
   // Initialize your application state
   final appState = ApplicationState();
@@ -44,8 +46,6 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    UserManager.instance.fetchAndStoreUserMappings();
-
     return AnimatedBuilder(
       animation: ThemeController.instance, // listens for setDark() changes
       builder: (context, _) {

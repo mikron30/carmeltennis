@@ -49,41 +49,34 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     selectedDate = DateTime.now();
 
-    // Load prefs that don't depend on auth (they’ll no-op if null)
-    _loadEmailPreference();
-    _loadDarkPreference();
-
-    // Always listen to auth changes
+    // Always subscribe to auth changes
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) async {
       if (u == null) {
-        // Logged out → clear flags/state & show login
         if (!mounted) return;
         setState(() {
-          _managerResolved = true; // allow build() to render login screen
+          _managerResolved = true;
           isManager = false;
           myUserName = null;
           lastSelectedPartners = [];
         });
         return;
       }
-
-      // Logged in → resolve manager first
       if (mounted) setState(() => _managerResolved = false);
-      await _refreshManagerFlag(); // sets isManager + _managerResolved = true
-
+      await _refreshManagerFlag();
       if (!mounted) return;
-
-      // After manager flag is correct, load username/partners/users
-      await fetchMyUserName(); // sets myUserName only (do not set isManager here)
+      await fetchMyUserName(); // name only; DO NOT set isManager here
       final partners = await fetchLastFivePartners(u.email!);
       if (!mounted) return;
-      setState(() {
-        lastSelectedPartners = partners;
-      });
+      setState(() => lastSelectedPartners = partners);
       fetchAllUsers();
     });
 
-    // Token refresh also re-checks manager
+    // ✅ Cold start: if already logged in, resolve immediately
+    if (FirebaseAuth.instance.currentUser != null) {
+      setState(() => _managerResolved = false);
+      _refreshManagerFlag();
+    }
+
     _idTokSub = FirebaseAuth.instance.idTokenChanges().listen((u) {
       if (u != null) {
         if (mounted) setState(() => _managerResolved = false);
@@ -223,27 +216,33 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _refreshManagerFlag() async {
     try {
-      final userEmail = FirebaseAuth.instance.currentUser?.email;
-      if (userEmail == null) return;
+      final email = FirebaseAuth.instance.currentUser?.email;
+      if (email == null) return;
 
-      final name = await UserManager.instance.getUsernameByEmail(userEmail);
-      final manager = name == "אודי אש" ||
-          name == "רני לפלר" ||
-          name == "עפר בן ישי" ||
-          name == "מיקי זילברשטיין" ||
-          name == "מועדון כרמל";
+      String? name = await UserManager.instance.getUsernameByEmail(email);
+
+      // Retry once if mapping wasn’t ready yet
+      if (name == null || name.trim().isEmpty) {
+        await UserManager.instance.fetchAndStoreUserMappings();
+        name = await UserManager.instance.getUsernameByEmail(email);
+      }
+
+      final n = (name ?? '').trim();
+      final manager = n == "אודי אש" ||
+          n == "רני לפלר" ||
+          n == "עפר בן ישי" ||
+          n == "מיקי זילברשטיין" ||
+          n == "מועדון כרמל";
 
       if (!mounted) return;
       setState(() {
-        myUserName = name;
+        myUserName = n.isEmpty ? null : n;
         isManager = manager;
-        _managerResolved = true; // mark as loaded
+        _managerResolved = true;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _managerResolved = true; // still mark as loaded even if failed
-      });
+      setState(() => _managerResolved = true);
     }
   }
 
