@@ -109,22 +109,19 @@ final _router = GoRouter(
                 })),
                 AuthStateChangeAction(((context, state) async {
                   final user = switch (state) {
-                    SignedIn state => state.user,
-                    UserCreated state => state.credential.user,
+                    SignedIn s => s.user,
+                    UserCreated s => s.credential.user,
                     _ => null
                   };
+                  if (user == null) return;
 
-                  if (user == null) {
-                    return;
-                  }
-
-                  // If the user is newly created, set their display name
                   if (state is UserCreated) {
                     user.updateDisplayName(user.email!.split('@')[0]);
                   }
 
-                  // After login, just navigate to home
-                  context.pushReplacement('/');
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    context.go('/'); // replaces stack cleanly
+                  });
                 })),
               ],
               footerBuilder: (context, _) {

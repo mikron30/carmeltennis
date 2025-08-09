@@ -43,42 +43,53 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   bool _darkMode = false; // persisted user pref (default false)
   late final StreamSubscription<User?> _authSub;
   late final StreamSubscription<User?> _idTokSub;
-
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     selectedDate = DateTime.now();
-    final User? user = FirebaseAuth.instance.currentUser;
 
-    if (user != null) {
-      // Load the email preference for the user
-      _loadEmailPreference();
-      _loadDarkPreference();
-      _refreshManagerFlag();
-      // Also refresh whenever Firebase auth state/token changes
-      _authSub = FirebaseAuth.instance.authStateChanges().listen((_) {
-        _refreshManagerFlag();
-      });
-      _idTokSub = FirebaseAuth.instance.idTokenChanges().listen((_) {
-        _refreshManagerFlag();
-      });
+    // Load prefs that don't depend on auth (they’ll no-op if null)
+    _loadEmailPreference();
+    _loadDarkPreference();
 
-      // Fetch the user name before fetching the last 5 partners
-      fetchMyUserName().then((_) {
+    // Always listen to auth changes
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((u) async {
+      if (u == null) {
+        // Logged out → clear flags/state & show login
+        if (!mounted) return;
         setState(() {
-          // Rebuild the UI after the username is fetched
+          _managerResolved = true; // allow build() to render login screen
+          isManager = false;
+          myUserName = null;
+          lastSelectedPartners = [];
         });
+        return;
+      }
 
-        // Fetch the last 5 reserved partners after the username has been fetched
-        fetchLastFivePartners(user.email!).then((partners) {
-          setState(() {
-            lastSelectedPartners = partners;
-          });
-        });
-        // Fetch all users
-        fetchAllUsers();
+      // Logged in → resolve manager first
+      if (mounted) setState(() => _managerResolved = false);
+      await _refreshManagerFlag(); // sets isManager + _managerResolved = true
+
+      if (!mounted) return;
+
+      // After manager flag is correct, load username/partners/users
+      await fetchMyUserName(); // sets myUserName only (do not set isManager here)
+      final partners = await fetchLastFivePartners(u.email!);
+      if (!mounted) return;
+      setState(() {
+        lastSelectedPartners = partners;
       });
-    }
+      fetchAllUsers();
+    });
+
+    // Token refresh also re-checks manager
+    _idTokSub = FirebaseAuth.instance.idTokenChanges().listen((u) {
+      if (u != null) {
+        if (mounted) setState(() => _managerResolved = false);
+        _refreshManagerFlag();
+      }
+    });
   }
 
   @override
@@ -238,16 +249,14 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> fetchMyUserName() async {
     try {
-      String? userEmail = FirebaseAuth.instance.currentUser?.email;
-      if (userEmail != null) {
-        myUserName = await UserManager.instance.getUsernameByEmail(userEmail);
-        isManager = myUserName == "אודי אש" ||
-            myUserName == "רני לפלר" ||
-            myUserName == "עפר בן ישי" ||
-            myUserName == "מיקי זילברשטיין" ||
-            myUserName == "מועדון כרמל";
-      }
-    } catch (e) {}
+      final email = FirebaseAuth.instance.currentUser?.email;
+      if (email == null) return;
+      final name = await UserManager.instance.getUsernameByEmail(email);
+      if (!mounted) return;
+      setState(() {
+        myUserName = name;
+      });
+    } catch (_) {}
   }
 
   Future<String?> _showCustomMessageDialog(BuildContext context) async {
@@ -530,7 +539,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
           Expanded(
             child: Consumer<ApplicationState>(
               builder: (context, appState, _) {
-                fetchMyUserName();
                 return CourtReservations(
                   selectedDate: selectedDate ?? DateTime.now(),
                   selectedPartner: selectedPartner ?? '',
