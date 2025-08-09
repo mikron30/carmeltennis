@@ -13,6 +13,7 @@ import 'app_state.dart';
 import 'home_page.dart';
 import 'user_manager.dart';
 import 'change_password.dart';
+import 'theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,28 +38,47 @@ void navigateToChangePassword(BuildContext context) {
   Navigator.pushNamed(context, '/change-password');
 }
 
-// Change MaterialApp to MaterialApp.router and add the routerConfig
+// App with live dark mode switching via ThemeController
 class App extends StatelessWidget {
   App({super.key});
 
   @override
   Widget build(BuildContext context) {
     UserManager.instance.fetchAndStoreUserMappings();
-    return MaterialApp.router(
-      title: 'מועדון הכרמל',
-      theme: ThemeData(
-        buttonTheme: Theme.of(context).buttonTheme.copyWith(
-              highlightColor: Colors.deepPurple,
+
+    return AnimatedBuilder(
+      animation: ThemeController.instance, // listens for setDark() changes
+      builder: (context, _) {
+        return MaterialApp.router(
+          title: 'מועדון הכרמל',
+          // Light theme (default)
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+            textTheme: GoogleFonts.robotoTextTheme(
+              Theme.of(context).textTheme,
             ),
-        primarySwatch: Colors.deepPurple,
-        textTheme: GoogleFonts.robotoTextTheme(
-          Theme.of(context).textTheme,
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        useMaterial3: true,
-      ),
-//      routerConfig: _router, // new
-      routerConfig: _router,
+            visualDensity: VisualDensity.adaptivePlatformDensity,
+          ),
+          // Dark theme
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.deepPurple,
+              brightness: Brightness.dark,
+            ),
+            textTheme: GoogleFonts.robotoTextTheme(
+              ThemeData(brightness: Brightness.dark).textTheme,
+            ),
+            visualDensity: VisualDensity.adaptivePlatformDensity,
+          ),
+          // Theme mode controlled globally (default = light).
+          // Call ThemeController.instance.setDark(true/false) from your drawer toggle.
+          themeMode: ThemeController.instance.mode,
+          routerConfig: _router,
+        );
+      },
     );
   }
 }
