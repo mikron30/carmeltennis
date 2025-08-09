@@ -679,18 +679,21 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
               leading: Icon(Icons.exit_to_app, color: iconTheme.color),
               title: Text('התנתק', style: titleStyle),
               onTap: () async {
-                // Capture navigator now (don’t touch context after awaits)
                 final navigator = Navigator.of(context);
                 final router = GoRouter.of(context);
-                // Optional: close the drawer first so the UI is stable
+
+                // Close drawer first (no context after awaits)
                 if (navigator.canPop()) navigator.pop();
 
-                await FirebaseAuth.instance.signOut();
-
-                if (!mounted) return;
-                setState(() {}); // update local UI if needed
-                // Navigate to home/login after sign-out
+                // Navigate to a screen that does NOT touch Firestore
+                // (your root shows login when loggedOut, that’s fine)
                 router.go('/');
+                // Sign out on the next frame (after navigation)
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  try {
+                    await FirebaseAuth.instance.signOut();
+                  } catch (_) {}
+                });
               },
             ),
           ),
