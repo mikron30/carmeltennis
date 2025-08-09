@@ -40,6 +40,41 @@ void navigateToChangePassword(BuildContext context) {
   Navigator.pushNamed(context, '/change-password');
 }
 
+ThemeData buildLightTheme() {
+  // Start from a consistent base
+  final base = ThemeData(
+    brightness: Brightness.light,
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    visualDensity: VisualDensity.adaptivePlatformDensity,
+  );
+
+  // Apply the same font to the base textTheme (keeps inherit:true everywhere)
+  final text = GoogleFonts.robotoTextTheme(base.textTheme);
+
+  return base.copyWith(
+    textTheme: text,
+  );
+}
+
+ThemeData buildDarkTheme() {
+  final base = ThemeData(
+    brightness: Brightness.dark,
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.deepPurple,
+      brightness: Brightness.dark,
+    ),
+    visualDensity: VisualDensity.adaptivePlatformDensity,
+  );
+
+  final text = GoogleFonts.robotoTextTheme(base.textTheme);
+
+  return base.copyWith(
+    textTheme: text,
+  );
+}
+
 // App with live dark mode switching via ThemeController
 class App extends StatelessWidget {
   App({super.key});
@@ -51,32 +86,14 @@ class App extends StatelessWidget {
       builder: (context, _) {
         return MaterialApp.router(
           title: 'מועדון הכרמל',
-          // Light theme (default)
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-            textTheme: GoogleFonts.robotoTextTheme(
-              Theme.of(context).textTheme,
-            ),
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-          ),
-          // Dark theme
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            brightness: Brightness.dark,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.deepPurple,
-              brightness: Brightness.dark,
-            ),
-            textTheme: GoogleFonts.robotoTextTheme(
-              ThemeData(brightness: Brightness.dark).textTheme,
-            ),
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-          ),
-          // Theme mode controlled globally (default = light).
-          // Call ThemeController.instance.setDark(true/false) from your drawer toggle.
+          theme: buildLightTheme(), // <-- use helper
+          darkTheme: buildDarkTheme(), // <-- use helper
           themeMode: ThemeController.instance.mode,
           routerConfig: _router,
+
+          // Optional: disable theme animation completely (prevents any lerp)
+          // themeAnimationDuration: Duration.zero,
+          // themeAnimationCurve: Curves.linear,
         );
       },
     );

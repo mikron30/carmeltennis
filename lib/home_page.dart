@@ -58,31 +58,39 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
           isManager = false;
           myUserName = null;
           lastSelectedPartners = [];
+          _receiveEmails = false; // local state cleared
+          _darkMode = false;
         });
         return;
       }
+      // Logged in:
       if (mounted) setState(() => _managerResolved = false);
-      await _refreshManagerFlag();
+      // 1) Load user prefs (dark + emails)
+      await _loadUserPrefs();
+      // 2) Resolve manager status
+      await _refreshManagerFlag(); // sets isManager + _managerResolved=true inside
       if (!mounted) return;
+      // 3) Now load username/partners/users
       await fetchMyUserName(); // name only; DO NOT set isManager here
       final partners = await fetchLastFivePartners(u.email!);
       if (!mounted) return;
       setState(() => lastSelectedPartners = partners);
       fetchAllUsers();
     });
-
-    // ✅ Cold start: if already logged in, resolve immediately
-    if (FirebaseAuth.instance.currentUser != null) {
-      setState(() => _managerResolved = false);
-      _refreshManagerFlag();
-    }
-
+    // Token refresh → keep manager fresh
     _idTokSub = FirebaseAuth.instance.idTokenChanges().listen((u) {
       if (u != null) {
         if (mounted) setState(() => _managerResolved = false);
         _refreshManagerFlag();
       }
     });
+
+    // ✅ Cold start: if already logged in, resolve immediately
+    if (FirebaseAuth.instance.currentUser != null) {
+      _loadUserPrefs();
+      setState(() => _managerResolved = false);
+      _refreshManagerFlag();
+    }
   }
 
   @override
@@ -100,24 +108,36 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Loads the user's email notification preference from Firestore.
-  Future<void> _loadEmailPreference() async {
+  Future<void> _loadUserPrefs() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      String email = user.email!;
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-          .collection('users_2024')
-          .where('מייל', isEqualTo: email)
-          .get();
-      if (querySnapshot.docs.isNotEmpty) {
-        Map<String, dynamic> data =
-            querySnapshot.docs.first.data() as Map<String, dynamic>;
-        bool pref = data['receiveReservationEmails'] ?? false;
-        setState(() {
-          _receiveEmails = pref;
-        });
-      }
+    if (user == null) return;
+
+    final q = await FirebaseFirestore.instance
+        .collection('users_2024')
+        .where('מייל', isEqualTo: user.email!)
+        .limit(1)
+        .get();
+
+    if (!mounted) return;
+
+    bool receive = false;
+    bool dark = false;
+
+    if (q.docs.isNotEmpty) {
+      final data = q.docs.first.data() as Map<String, dynamic>;
+      receive = (data['receiveReservationEmails'] ?? false) as bool;
+      dark = (data['darkMode'] ?? false) as bool;
     }
+
+    setState(() {
+      _receiveEmails = receive;
+      _darkMode = dark;
+    });
+
+    // Apply the theme AFTER this frame to avoid rebuild assertions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ThemeController.instance.setDark(dark);
+    });
   }
 
   /// Toggles the email notification preference and updates Firestore.
@@ -571,29 +591,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
         ],
       ),
     );
-  }
-
-  Future<void> _loadDarkPreference() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final email = user.email!;
-    final q = await FirebaseFirestore.instance
-        .collection('users_2024')
-        .where('מייל', isEqualTo: email)
-        .limit(1)
-        .get();
-
-    if (!mounted) return; // guard before setState
-    final pref = q.docs.isNotEmpty
-        ? (q.docs.first.data() as Map<String, dynamic>)['darkMode'] ?? false
-        : false;
-
-    setState(() => _darkMode = pref);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ThemeController.instance.setDark(pref); // no context here
-    });
   }
 
   Future<void> _toggleDarkPreference(bool newValue) async {
