@@ -15,6 +15,8 @@ import 'package:intl/intl.dart'; // For date formatting
 import 'users_management.dart';
 import 'theme_controller.dart';
 import 'dart:async';
+import 'tv_screen.dart';
+import 'tv_message_editor.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -737,6 +739,34 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ManageUsersScreen()),
+                  );
+                },
+              ),
+            ),
+          // Manager-only: TV display
+          if (isManager)
+            _themedTile(
+              context,
+              ListTile(
+                leading: Icon(Icons.tv, color: iconTheme.color),
+                title: Text('מסך טלוויזיה', style: titleStyle),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TvScreen()),
+                  );
+                },
+              ),
+            ),
+          // Manager-only: TV marquee editor
+          if (isManager)
+            _themedTile(
+              context,
+              ListTile(
+                leading: Icon(Icons.message, color: iconTheme.color),
+                title: Text('עריכת הודעת טלוויזיה', style: titleStyle),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TvMessageEditor()),
                   );
                 },
               ),

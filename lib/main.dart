@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart'; // Import the generated options file
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +13,8 @@ import 'home_page.dart';
 import 'user_manager.dart';
 import 'change_password.dart';
 import 'theme_controller.dart';
+import 'tv_screen.dart';
+import 'tv_message_editor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -178,6 +179,14 @@ final _router = GoRouter(
         GoRoute(
           path: 'change-password',
           builder: (context, state) => const ChangePasswordScreen(),
+        ),
+        GoRoute(
+          path: 'tv',
+          builder: (context, state) => const TvScreen(),
+        ),
+        GoRoute(
+          path: 'tv-message',
+          builder: (context, state) => const TvMessageEditor(),
         ),
       ],
     ),

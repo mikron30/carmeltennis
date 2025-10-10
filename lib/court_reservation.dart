@@ -11,12 +11,14 @@ class CourtReservations extends StatefulWidget {
   final DateTime selectedDate; // Selected date passed from DateSelector
   final String? selectedPartner; // Add this line
   final String? myUserName;
+  final bool useFullNames; // When true, show full names (for TV)
 
   const CourtReservations(
       {required this.selectedDate,
       super.key,
       this.selectedPartner,
-      this.myUserName});
+      this.myUserName,
+      this.useFullNames = false});
 
   @override
   CourtReservationsState createState() => CourtReservationsState();
@@ -816,15 +818,19 @@ class CourtReservationsState extends State<CourtReservations> {
     bool isReserved =
         courtsReservations[courtIndex][hour]?['isReserved'] ?? false;
     String? longUserName = courtsReservations[courtIndex][hour]?['userName'];
-    String userName = formatName(longUserName ?? '');
+    String userName = widget.useFullNames
+        ? (longUserName ?? '')
+        : formatName(longUserName ?? '');
     String? longPartnerName = courtsReservations[courtIndex][hour]?['partner'];
-    String partnerName = formatName(longPartnerName ?? '');
+    String partnerName = widget.useFullNames
+        ? (longPartnerName ?? '')
+        : formatName(longPartnerName ?? '');
     // Check if the partner field starts with "!" indicating a custom message
     bool isCustomMessage =
         longPartnerName != null && longPartnerName.startsWith('!');
     // Remove the leading "!" for display if it's a custom message
     String displayMessage = isCustomMessage
-        ? longPartnerName!.substring(1) // Remove "!" for custom messages
+        ? longPartnerName.substring(1) // Remove "!" for custom messages
         : "$userName, $partnerName"; // Display as usual if it's a regular partner
 
     // Create a DateTime object for the current slot's time on the selected date
@@ -836,8 +842,20 @@ class CourtReservationsState extends State<CourtReservations> {
       hour,
     );
 
-    bool isWithin30Minutes = reservationDateTime.difference(now).inMinutes < 30;
-    bool isPast = reservationDateTime.isBefore(now) || isWithin30Minutes;
+    // For TV mode, ignore all time/date logic - only show reserved/available
+    bool isPast = true;
+    bool isTv = false;
+    if (widget.useFullNames) {
+      // TV mode: never show as past - only reserved (red) or available (green)
+      isPast = false;
+      // In TV view: show names instead of "תפוס", no clicks, no blue color
+      isTv = true;
+    } else {
+      // Regular mode: use original logic
+      bool isWithin30Minutes =
+          reservationDateTime.difference(now).inMinutes < 30;
+      isPast = reservationDateTime.isBefore(now) || isWithin30Minutes;
+    }
 
     bool isMine = longUserName == widget.myUserName ||
         longPartnerName == widget.myUserName;
@@ -853,44 +871,76 @@ class CourtReservationsState extends State<CourtReservations> {
             (holidayType != null && holidayType == "ערב חג")) &&
         (hour >= 7 && hour <= 18) &&
         courtIndex == 0) {
+      // Coach line: on TV we want to show players' full names if reserved
+      final coachLabel =
+          (widget.useFullNames && isReserved) ? displayMessage : "מאמן";
+      final Color coachBg = widget.useFullNames
+          ? (isReserved
+              ? Colors.red
+              : Colors.red) // TV mode: always red for coach
+          : (isReserved ? Colors.red : (isPast ? Colors.grey : Colors.green));
+
+      if (widget.useFullNames) {
+        return Container(
+          decoration: BoxDecoration(
+            color: coachBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          child: Text(
+            coachLabel,
+            style: const TextStyle(color: Colors.white),
+          ),
+        );
+      }
+
       return ElevatedButton(
-        onPressed: null, // Disable the button
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-        child: Text("מאמן"),
+        onPressed: null, // Always non-interactive for coach line
+        style: ElevatedButton.styleFrom(
+          backgroundColor: coachBg,
+          foregroundColor: Colors.white,
+        ),
+        child: Text(coachLabel),
       );
     } else {
-// Disable if the time is in the past
-      return ElevatedButton(
-        onPressed: (isPast && !isReserved && !isManager)
-            ? null // Disable if unreserved, in the past, and user is not a manager
-            : () {
-                // Check if the reservation is by someone else and not the user's
-                if (isReserved && !isMine && !isManager) {
-                  return; // Do nothing if the slot is reserved by someone else
-                }
-                // Proceed with reservation if conditions are valid
-                //print(" reservation ${courtIndex}");
+      final String label = isReserved
+          ? (isTv
+              ? displayMessage
+              : (isManager || isMine ? displayMessage : "תפוס"))
+          : (isTv ? "פנוי" : (isPast ? "סגור" : "פנוי"));
 
+      final Color bgColor = isReserved
+          ? (isTv ? Colors.red : (isMine ? Colors.blue : Colors.red))
+          : (isTv ? Colors.green : (isPast ? Colors.grey : Colors.green));
+
+      if (isTv) {
+        return Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white),
+          ),
+        );
+      }
+
+      return ElevatedButton(
+        onPressed: ((isPast && !isReserved && !isManager)
+            ? null
+            : () {
+                if (isReserved && !isMine && !isManager) {
+                  return;
+                }
                 _reserve(courtIndex + 1, hour);
-              },
+              }),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isReserved
-              ? (isMine
-                  ? Colors.blue
-                  : Colors
-                      .red) // Blue if it's the user's reservation, Red if someone else's
-              : (isPast
-                  ? Colors.grey
-                  : Colors
-                      .green), // Gray for past unreserved slots, Green for available
+          backgroundColor: bgColor,
+          foregroundColor: Colors.white,
         ),
-        child: Text(
-          isReserved
-              ? (isManager || isMine ? displayMessage : "תפוס")
-              : isPast
-                  ? "סגור" // Label for past time slots
-                  : "פנוי", // Label for available slots
-        ),
+        child: Text(label),
       );
     }
   }
