@@ -65,16 +65,18 @@ class _TvScreenState extends State<TvScreen> {
 
   String _formatDateHebrew(DateTime d) {
     // Basic Hebrew-like formatting without intl locale dependency changes
+    // Dart weekday: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday, 7=Sunday
     const weekdays = [
-      'יום שני',
-      'יום שלישי',
-      'יום רביעי',
-      'יום חמישי',
-      'יום שישי',
-      'יום שבת',
-      'יום ראשון',
+      '', // index 0 - not used
+      'יום שני', // 1
+      'יום שלישי', // 2
+      'יום רביעי', // 3
+      'יום חמישי', // 4
+      'יום שישי', // 5
+      'יום שבת', // 6
+      'יום ראשון', // 7
     ];
-    final weekday = weekdays[(d.weekday % 7)];
+    final weekday = weekdays[d.weekday];
     return '$weekday ${d.day}.${d.month}.${d.year}';
   }
 
