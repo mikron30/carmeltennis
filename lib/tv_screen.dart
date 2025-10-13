@@ -14,16 +14,19 @@ class _TvScreenState extends State<TvScreen> {
   late DateTime _effectiveToday;
   late DateTime _effectiveTomorrow;
   Timer? _midnightTimer;
-  Timer? _tickTimer;
+  Timer? _refreshTimer;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
     _computeEffectiveDates();
     _scheduleMidnightRoll();
-    // Tick every minute to update time-sensitive UI if needed
-    _tickTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      _computeEffectiveDates();
+    // Refresh court data every 5 minutes
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      setState(() {
+        _refreshKey++;
+      });
     });
   }
 
@@ -59,7 +62,7 @@ class _TvScreenState extends State<TvScreen> {
   @override
   void dispose() {
     _midnightTimer?.cancel();
-    _tickTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -117,6 +120,7 @@ class _TvScreenState extends State<TvScreen> {
                               child: Directionality(
                                 textDirection: TextDirection.rtl,
                                 child: CourtReservations(
+                                  key: ValueKey('today_$_refreshKey'),
                                   selectedDate: _effectiveToday,
                                   selectedPartner: '',
                                   myUserName: null,
@@ -157,6 +161,7 @@ class _TvScreenState extends State<TvScreen> {
                               child: Directionality(
                                 textDirection: TextDirection.rtl,
                                 child: CourtReservations(
+                                  key: ValueKey('tomorrow_$_refreshKey'),
                                   selectedDate: _effectiveTomorrow,
                                   selectedPartner: '',
                                   myUserName: null,
