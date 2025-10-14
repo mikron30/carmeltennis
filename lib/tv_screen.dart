@@ -22,12 +22,7 @@ class _TvScreenState extends State<TvScreen> {
     super.initState();
     _computeEffectiveDates();
     _scheduleMidnightRoll();
-    // Refresh court data every 5 minutes
-    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      setState(() {
-        _refreshKey++;
-      });
-    });
+    _scheduleHourlyRefresh();
   }
 
   void _computeEffectiveDates() {
@@ -56,6 +51,21 @@ class _TvScreenState extends State<TvScreen> {
     _midnightTimer = Timer(duration, () {
       _computeEffectiveDates();
       _scheduleMidnightRoll();
+    });
+  }
+
+  void _scheduleHourlyRefresh() {
+    _refreshTimer?.cancel();
+    final now = DateTime.now();
+    // Schedule refresh at the top of the next hour
+    DateTime nextHour =
+        DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
+    final duration = nextHour.difference(now);
+    _refreshTimer = Timer(duration, () {
+      setState(() {
+        _refreshKey++;
+      });
+      _scheduleHourlyRefresh();
     });
   }
 
