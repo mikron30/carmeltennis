@@ -386,14 +386,14 @@ class CourtReservationsState extends State<CourtReservations> {
               if (isManager || (!isBeforeOrNow(reservationDateTime))) {
                 if (!isManager &&
                     reservationDateTime.difference(DateTime.now()).inMinutes <
-                        30) {
+                        180) {
                   showDialog(
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
                         title: const Text('שגיאה'),
                         content: const Text(
-                            'לא ניתן למחוק הזמנה פחות מחצי שעה מראש'),
+                            'לא ניתן למחוק הזמנה פחות משלוש שעות מראש'),
                         actions: <Widget>[
                           TextButton(
                             child: const Text('אישור'),
@@ -851,10 +851,9 @@ class CourtReservationsState extends State<CourtReservations> {
       // In TV view: show names instead of "תפוס", no clicks, no blue color
       isTv = true;
     } else {
-      // Regular mode: use original logic
-      bool isWithin30Minutes =
-          reservationDateTime.difference(now).inMinutes < 30;
-      isPast = reservationDateTime.isBefore(now) || isWithin30Minutes;
+      // Regular mode: use original logic - allow booking up to 1 hour before
+      bool isWithin1Hour = reservationDateTime.difference(now).inMinutes < 60;
+      isPast = reservationDateTime.isBefore(now) || isWithin1Hour;
     }
 
     bool isMine = longUserName == widget.myUserName ||

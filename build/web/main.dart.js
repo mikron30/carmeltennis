@@ -54353,7 +54353,7 @@ A.It.prototype={
 acO(a,b,c){var s,r=null
 if(b==null)return B.a1
 s=A.aK(b,1,B.aE,r,r,r,r)
-return new A.cu(B.cb,1,r,b.length>12?B.ZD:s,r)},
+return new A.cu(B.cb,1,r,b.length>12?B.ZE:s,r)},
 D(a){var s=this.d,r=t.My
 if(r.b(s)&&!s.gyL()){s.toString
 s=r.a(s).pu$
@@ -100840,7 +100840,7 @@ A.a2w.prototype={}
 A.wE.prototype={
 D(a){var s=null,r=this.c
 r=r==null?s:"GoException: "+r.a
-return A.lL(!0,A.cY(A.bZ(A.b([B.ZI,B.aD,A.aK(r==null?"page not found":r,s,s,s,s,s,s),B.aD,new A.Iz(new A.adG(a),B.ZH,s)],t.p),B.B,B.by,B.v),s,s),B.ae,!0)}}
+return A.lL(!0,A.cY(A.bZ(A.b([B.ZJ,B.aD,A.aK(r==null?"page not found":r,s,s,s,s,s,s),B.aD,new A.Iz(new A.adG(a),B.ZI,s)],t.p),B.B,B.by,B.v),s,s),B.ae,!0)}}
 A.adG.prototype={
 $0(){return A.rW(this.a).vK("/",null)},
 $S:0}
@@ -101546,7 +101546,7 @@ else c9=!0
 c9=!c9}else c9=!0
 s=c9?19:21
 break
-case 19:if(!i&&B.e.ce(f.iW(new A.bp(Date.now(),0,!1)).a,6e7)<30){c9=n.c
+case 19:if(!i&&B.e.ce(f.iW(new A.bp(Date.now(),0,!1)).a,6e7)<180){c9=n.c
 c9.toString
 A.mf(null,null,!0,null,new A.a9P(),c9,null,null,!0,!0,t.z)
 s=1
@@ -101781,8 +101781,8 @@ case 1:return A.q(q,r)}})
 return A.r($async$tt,r)},
 D(a){return A.b3P(new A.aa0(this),this.tt(this.a.c),t.a)},
 aty(a3,a4){var s,r,q,p,o,n,m,l,k,j,i,h,g,f,e,d,c,b,a=this,a0=null,a1=a.f,a2=a1.length
-if(a3>=a2)return A.kc(!1,B.ZN,a0,a0,B.O,a0,a0,a0,a0,a0,a0,A.ad8(a0,a0,B.ea,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0))
-if(!a1[a3].ap(a4))return A.kc(!1,B.Zy,a0,a0,B.O,a0,a0,a0,a0,a0,a0,A.ad8(a0,a0,B.ea,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0))
+if(a3>=a2)return A.kc(!1,B.ZO,a0,a0,B.O,a0,a0,a0,a0,a0,a0,A.ad8(a0,a0,B.ea,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0))
+if(!a1[a3].ap(a4))return A.kc(!1,B.Zz,a0,a0,B.O,a0,a0,a0,a0,a0,a0,A.ad8(a0,a0,B.ea,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0,a0))
 a1=a.f[a3].h(0,a4)
 s=a1==null?a0:a1.h(0,"isReserved")
 if(s==null)s=!1
@@ -101800,7 +101800,7 @@ a1=a.a.c
 l=A.bL(A.aY(a1),A.b1(a1),A.bN(a1),a4,0,0,0,0)
 k=a.a.f
 if(k)j=!1
-else{i=B.e.ce(l.iW(m).a,6e7)<30
+else{i=B.e.ce(l.iW(m).a,6e7)<60
 j=l.nV(m)||i}a1=a.a
 a2=a1.e
 h=r==a2||p==a2
@@ -101864,7 +101864,7 @@ $0(){},
 $S:0}
 A.a9Y.prototype={
 $1(a){var s=null
-return A.ml(A.b([A.fv(!1,B.BK,s,s,B.O,s,s,s,s,new A.a9W(a),s,s),A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9X(a),s,s)],t.p),B.Zo,B.Zs)},
+return A.ml(A.b([A.fv(!1,B.BK,s,s,B.O,s,s,s,s,new A.a9W(a),s,s),A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9X(a),s,s)],t.p),B.Zo,B.Zt)},
 $S:35}
 A.a9W.prototype={
 $0(){A.bM(this.a,!1).j0(!1)},
@@ -101882,14 +101882,14 @@ return n&&m},
 $S:167}
 A.a9O.prototype={
 $1(a){var s=null
-return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9N(a),s,s)],t.p),B.ZE,B.BG)},
+return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9N(a),s,s)],t.p),B.ZF,B.BG)},
 $S:35}
 A.a9N.prototype={
 $0(){A.bM(this.a,!1).cJ()},
 $S:0}
 A.a9P.prototype={
 $1(a){var s=null
-return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9M(a),s,s)],t.p),B.ZO,B.fX)},
+return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9M(a),s,s)],t.p),B.Zp,B.fX)},
 $S:35}
 A.a9M.prototype={
 $0(){return A.bM(this.a,!1).cJ()},
@@ -101910,7 +101910,7 @@ $0(){A.bM(this.a,!1).cJ()},
 $S:0}
 A.a9S.prototype={
 $1(a){var s=null
-return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9J(a),s,s)],t.p),B.ZC,B.fX)},
+return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9J(a),s,s)],t.p),B.ZD,B.fX)},
 $S:35}
 A.a9J.prototype={
 $0(){A.bM(this.a,!1).cJ()},
@@ -101924,7 +101924,7 @@ $0(){A.bM(this.a,!1).cJ()},
 $S:0}
 A.a9U.prototype={
 $1(a){var s=null
-return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9H(this.a,a),s,s)],t.p),B.Zt,B.fX)},
+return A.ml(A.b([A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.a9H(this.a,a),s,s)],t.p),B.Zu,B.fX)},
 $S:35}
 A.a9H.prototype={
 $0(){if(this.a.c==null)return
@@ -102043,10 +102043,10 @@ return A.l(m.a.iQ(n,null),$async$wy)
 case 6:case 3:q.yi()
 return A.q(null,r)}})
 return A.r($async$wy,r)},
-D(a){var s,r,q=this,p=null,o="\u05d0\u05d9\u05df \u05de\u05d2\u05e8\u05e9\u05d9\u05dd",n="\u05de\u05d2\u05e8\u05e9 \u05d0\u05d7\u05d3",m=A.Ov(B.ZK),l=A.kc(!1,B.Zv,p,p,B.O,p,p,p,p,new A.avr(q,a),p,p),k=A.aK("Selected date: "+A.wf("yyyy-MM-dd").mD(q.d),p,p,p,p,p,p),j=q.e,i=t.N
+D(a){var s,r,q=this,p=null,o="\u05d0\u05d9\u05df \u05de\u05d2\u05e8\u05e9\u05d9\u05dd",n="\u05de\u05d2\u05e8\u05e9 \u05d0\u05d7\u05d3",m=A.Ov(B.ZL),l=A.kc(!1,B.Zw,p,p,B.O,p,p,p,p,new A.avr(q,a),p,p),k=A.aK("Selected date: "+A.wf("yyyy-MM-dd").mD(q.d),p,p,p,p,p,p),j=q.e,i=t.N
 i=A.b([A.acc(A.aK(o,p,p,p,p,p,p),o,i),A.acc(A.aK(n,p,p,p,p,p,p),n,i),A.acc(A.aK("\u05e9\u05dc\u05d5\u05e9\u05d4 \u05de\u05d2\u05e8\u05e9\u05d9\u05dd, \u05d7\u05d2, \u05db\u05de\u05d5 \u05e9\u05d1\u05ea",p,p,p,p,p,p),"\u05d7\u05d2",i),A.acc(A.aK("\u05e2\u05e8\u05d1 \u05d7\u05d2, \u05db\u05de\u05d5 \u05e9\u05d9\u05e9\u05d9",p,p,p,p,p,p),"\u05e2\u05e8\u05d1 \u05d7\u05d2",i)],t.FG)
 s=t.p
-r=A.cH(A.b([A.aQ6(p,!1,p,p,p,!1,p,p,new A.avs(q),p,p,p,p,p,!1,q.f),B.Zw],s),B.B,B.by,B.v,p)
+r=A.cH(A.b([A.aQ6(p,!1,p,p,p,!1,p,p,new A.avs(q),p,p,p,p,p,!1,q.f),B.Zx],s),B.B,B.by,B.v,p)
 return A.nz(m,p,A.cY(A.bZ(A.b([l,k,new A.wr(i,j,new A.avt(q),p,t.Af),r,A.kc(!1,A.aK(q.f?"Delete Holiday":"Add Holiday",p,p,p,p,p,p),p,p,B.O,p,p,p,p,q.gaia(),p,p),A.eo(A.aMo(new A.avu(q),q.r.length,p,!1),1)],s),B.B,B.by,B.v),p,p),p,p)}}
 A.avv.prototype={
 $0(){this.a.r=this.b.gd6()},
@@ -102350,7 +102350,7 @@ else B.b.O(p,A.b([new A.ep(1,B.aV,A.kc(!1,new A.cX(new A.aB_(s),r),r,r,B.O,r,r,r
 p.push(B.dw)
 p.push(new A.ep(1,B.aV,A.f9(B.h7,A.b([new A.BB(new A.aB1(s),new A.aB2(s),new A.aB3(s),new A.aB4(),r,t.dr)],q),B.u,B.aL,r),r))
 return A.eD(r,A.bZ(A.b([new A.aN(B.f6,A.cH(p,B.B,B.t,B.v,r),r),B.b5,A.eo(new A.Cj(new A.aB5(s),r,r,t.Is),1)],q),B.B,B.t,B.v),B.G,!1,r,r,r,r,new A.aB6(s),r,r,r,r,r,r,r,r,r,r,r,r,r,r,r)},
-acy(){return A.cY(A.bZ(A.b([B.Zr,B.Bb,new A.OE(!1,new A.aAM(this),null)],t.p),B.B,B.by,B.v),null,null)},
+acy(){return A.cY(A.bZ(A.b([B.Zs,B.Bb,new A.OE(!1,new A.aAM(this),null)],t.p),B.B,B.by,B.v),null,null)},
 x5(a){return this.arf(a)},
 arf(a){var s=0,r=A.t(t.H),q,p=this,o,n,m,l,k,j,i,h
 var $async$x5=A.n(function(b,c){if(b===1)return A.p(c,r)
@@ -102516,7 +102516,7 @@ $0(){this.a.z=this.b},
 $S:0}
 A.aBd.prototype={
 $1(a){var s=null,r=this.a,q=A.q0(!0,B.b2,!1,s,!0,B.u,s,A.vp(),r,s,s,s,s,s,2,B.Kl,B.G,!0,s,!0,s,!1,s,B.aR,s,s,s,s,s,s,s,1,s,s,!1,"\u2022",s,s,s,s,s,!1,s,!1,s,!0,s,B.bj,s,s,B.ba,B.b0,s,s,s,s,s,s,s,B.ai,s,B.bC,s,s,s,s)
-return A.ml(A.b([A.fv(!1,B.BK,s,s,B.O,s,s,s,s,new A.aBb(a),s,s),A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.aBc(a,r),s,s)],t.p),q,B.ZJ)},
+return A.ml(A.b([A.fv(!1,B.BK,s,s,B.O,s,s,s,s,new A.aBb(a),s,s),A.fv(!1,B.cu,s,s,B.O,s,s,s,s,new A.aBc(a,r),s,s)],t.p),q,B.ZK)},
 $S:35}
 A.aBb.prototype={
 $0(){A.bM(this.a,!1).cJ()},
@@ -102836,7 +102836,7 @@ p=A.c0(new A.aE(o)).gaW()
 s=p==null?q:p.a.c.a.c
 r=s==null?"":s
 p=t.p
-return A.cH(A.b([new A.aN(B.oQ,new A.Hr(B.ZL,new A.a7l(this,a),q),q),A.aNn(new A.aN(B.oQ,new A.Hr(A.cH(A.b([A.aK("\u05e9\u05dc\u05d5\u05dd "+r,q,q,q,q,q,q)],p),B.B,B.t,B.v,q),new A.a7m(a),q),q),!1,!1,!1,!1)],p),B.B,B.t,B.v,q)}}
+return A.cH(A.b([new A.aN(B.oQ,new A.Hr(B.ZM,new A.a7l(this,a),q),q),A.aNn(new A.aN(B.oQ,new A.Hr(A.cH(A.b([A.aK("\u05e9\u05dc\u05d5\u05dd "+r,q,q,q,q,q,q)],p),B.B,B.t,B.v,q),new A.a7m(a),q),q),!1,!1,!1,!1)],p),B.B,B.t,B.v,q)}}
 A.a7l.prototype={
 $0(){A.aM6(this.b,"/sign-in",t.X)},
 $S:0}
@@ -102925,7 +102925,7 @@ break
 case 6:case 1:return A.q(q,r)
 case 2:return A.p(o,r)}})
 return A.r($async$Ck,r)},
-D(a){var s=null,r=A.Ov(B.Zu),q=A.rt(A.q0(!0,B.b2,!1,s,!0,B.u,s,A.vp(),this.d,s,s,s,s,s,2,B.Kn,B.G,!0,s,!0,s,!1,s,B.aR,s,s,s,s,s,s,s,4,s,s,!1,"\u2022",s,s,s,s,s,!1,s,!1,s,!0,s,B.bj,s,s,B.ba,B.b0,s,s,s,s,s,s,s,B.ai,s,B.bC,s,s,s,s),B.au),p=this.e,o=p?s:this.gap8()
+D(a){var s=null,r=A.Ov(B.Zv),q=A.rt(A.q0(!0,B.b2,!1,s,!0,B.u,s,A.vp(),this.d,s,s,s,s,s,2,B.Kn,B.G,!0,s,!0,s,!1,s,B.aR,s,s,s,s,s,s,s,4,s,s,!1,"\u2022",s,s,s,s,s,!1,s,!1,s,!0,s,B.bj,s,s,B.ba,B.b0,s,s,s,s,s,s,s,B.ai,s,B.bC,s,s,s,s),B.au),p=this.e,o=p?s:this.gap8()
 return A.nz(r,s,new A.aN(B.d3,A.bZ(A.b([q,B.TY,A.aRk(B.K5,A.aK(p?"\u05e9\u05d5\u05de\u05e8...":"\u05e9\u05de\u05d5\u05e8",s,s,s,s,s,s),o,s)],t.p),B.am,B.t,B.v),s),s,s)}}
 A.aH7.prototype={
 $0(){},
@@ -103201,7 +103201,7 @@ s.e.jQ(B.fU)
 s.f.jQ(B.fU)
 s.r.jQ(B.fU)},
 D(a){var s=this,r=null,q=t.p
-return A.nz(A.Ov(B.Zj),r,new A.aN(B.d3,A.bZ(A.b([A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.d,r,r,r,r,r,2,B.Kk,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.e,r,r,r,r,r,2,B.Kj,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.f,r,r,r,r,r,2,B.Kp,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.r,r,r,r,r,r,2,B.Ko,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),B.Bb,A.cH(A.b([A.kc(!1,B.Zp,r,r,B.O,r,r,r,r,s.gac8(),r,r),A.kc(!1,B.ZB,r,r,B.O,r,r,r,r,s.gaoH(),r,r)],q),B.B,B.ft,B.v,r)],q),B.B,B.t,B.v),r),r,r)}}
+return A.nz(A.Ov(B.Zj),r,new A.aN(B.d3,A.bZ(A.b([A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.d,r,r,r,r,r,2,B.Kk,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.e,r,r,r,r,r,2,B.Kj,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.f,r,r,r,r,r,2,B.Kp,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),A.q0(!0,B.b2,!1,r,!0,B.u,r,A.vp(),s.r,r,r,r,r,r,2,B.Ko,B.G,!0,r,!0,r,!1,r,B.aR,r,r,r,r,r,r,r,1,r,r,!1,"\u2022",r,r,r,r,r,!1,r,!1,r,!0,r,B.bj,r,r,B.ba,B.b0,r,r,r,r,r,r,r,B.ai,r,B.bC,r,r,r,r),B.Bb,A.cH(A.b([A.kc(!1,B.Zq,r,r,B.O,r,r,r,r,s.gac8(),r,r),A.kc(!1,B.ZC,r,r,B.O,r,r,r,r,s.gaoH(),r,r)],q),B.B,B.ft,B.v,r)],q),B.B,B.t,B.v),r),r,r)}}
 A.OS.prototype={
 Cp(a,b,c){return this.apJ(a,b,c)},
 apJ(a,b,c){var s=0,r=A.t(t.Wd),q,p=this,o,n
@@ -111205,8 +111205,8 @@ B.a1=new A.eG(0,0,null,null)
 B.TV=new A.eG(108,null,null,null)
 B.TW=new A.eG(16,null,null,null)
 B.dw=new A.eG(8,null,null,null)
-B.Zz=new A.bU("\u05e9\u05e2\u05d4",null,null,null,null,null,null,null,null)
-B.FH=new A.hC(B.J,null,null,B.Zz,null)
+B.ZA=new A.bU("\u05e9\u05e2\u05d4",null,null,null,null,null,null,null,null)
+B.FH=new A.hC(B.J,null,null,B.ZA,null)
 B.TX=new A.eG(50,null,B.FH,null)
 B.TY=new A.eG(null,12,null,null)
 B.aD=new A.eG(null,16,null,null)
@@ -111228,18 +111228,18 @@ B.U6=new A.lP(3,"hide")
 B.a2e=new A.lP(4,"remove")
 B.Bd=new A.lP(5,"timeout")
 B.U7=new A.yS(null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.ZM=new A.bU("User removed successfully",null,null,null,null,null,null,null,null)
-B.U8=new A.jG(B.ZM,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
-B.Zq=new A.bU("User not found in database",null,null,null,null,null,null,null,null)
-B.U9=new A.jG(B.Zq,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
-B.ZG=new A.bU("User added successfully",null,null,null,null,null,null,null,null)
-B.Ua=new A.jG(B.ZG,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
-B.ZF=new A.bU("\u05d4\u05d5\u05d3\u05e2\u05ea \u05d8\u05dc\u05d5\u05d5\u05d9\u05d6\u05d9\u05d4 \u05e0\u05e9\u05de\u05e8\u05d4",null,null,null,null,null,null,null,null)
-B.Ub=new A.jG(B.ZF,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
-B.Zx=new A.bU("Password changed successfully",null,null,null,null,null,null,null,null)
-B.Uc=new A.jG(B.Zx,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
-B.ZA=new A.bU("\u05e9\u05de\u05d9\u05e8\u05d4 \u05e0\u05db\u05e9\u05dc\u05d4",null,null,null,null,null,null,null,null)
-B.Ud=new A.jG(B.ZA,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.ZN=new A.bU("User removed successfully",null,null,null,null,null,null,null,null)
+B.U8=new A.jG(B.ZN,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.Zr=new A.bU("User not found in database",null,null,null,null,null,null,null,null)
+B.U9=new A.jG(B.Zr,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.ZH=new A.bU("User added successfully",null,null,null,null,null,null,null,null)
+B.Ua=new A.jG(B.ZH,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.ZG=new A.bU("\u05d4\u05d5\u05d3\u05e2\u05ea \u05d8\u05dc\u05d5\u05d5\u05d9\u05d6\u05d9\u05d4 \u05e0\u05e9\u05de\u05e8\u05d4",null,null,null,null,null,null,null,null)
+B.Ub=new A.jG(B.ZG,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.Zy=new A.bU("Password changed successfully",null,null,null,null,null,null,null,null)
+B.Uc=new A.jG(B.Zy,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
+B.ZB=new A.bU("\u05e9\u05de\u05d9\u05e8\u05d4 \u05e0\u05db\u05e9\u05dc\u05d4",null,null,null,null,null,null,null,null)
+B.Ud=new A.jG(B.ZB,null,null,null,null,null,null,null,null,null,null,null,null,B.cm,null,null,null,B.u,null)
 B.Be=new A.He(0,"permissive")
 B.Ue=new A.He(1,"normal")
 B.Uf=new A.He(2,"forced")
@@ -111625,32 +111625,32 @@ B.Zl=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05de\u05d7\u05d5\u0
 B.Zm=new A.bU(" \u05d4\u05e9\u05d5\u05ea\u05e4.\u05d4 \u05d4\u05d2\u05d9\u05e2.\u05d4 \u05dc\u05de\u05db\u05e1\u05ea \u05d4\u05d4\u05d6\u05de\u05e0\u05d5\u05ea \u05d4\u05e9\u05d1\u05d5\u05e2\u05d9\u05d5\u05ea \u05d1\u05e9\u05e2\u05d5\u05ea \u05d4\u05e2\u05e8\u05d1 6 \u05e2\u05d3 9",null,null,null,null,null,null,null,null)
 B.Zn=new A.bU(" \u05d4\u05d2\u05e2\u05ea \u05dc\u05de\u05db\u05e1\u05ea \u05d4\u05d4\u05d6\u05de\u05e0\u05d5\u05ea \u05d4\u05e9\u05d1\u05d5\u05e2\u05d9\u05d5\u05ea \u05d1\u05e9\u05e2\u05d5\u05ea \u05d4\u05e2\u05e8\u05d1 6 \u05e2\u05d3 9",null,null,null,null,null,null,null,null)
 B.Zo=new A.bU("\u05d4\u05d0\u05dd \u05d0\u05ea\u05d4 \u05d1\u05d8\u05d5\u05d7 \u05e9\u05d1\u05e8\u05e6\u05d5\u05e0\u05da \u05dc\u05de\u05d7\u05d5\u05e7 \u05d0\u05ea \u05d4\u05d4\u05d6\u05de\u05e0\u05d4?",null,null,null,null,null,null,null,null)
-B.Zp=new A.bU("Add User",null,null,null,null,null,null,null,null)
+B.Zp=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05de\u05d7\u05d5\u05e7 \u05d4\u05d6\u05de\u05e0\u05d4 \u05e4\u05d7\u05d5\u05ea \u05de\u05e9\u05dc\u05d5\u05e9 \u05e9\u05e2\u05d5\u05ea \u05de\u05e8\u05d0\u05e9",null,null,null,null,null,null,null,null)
+B.Zq=new A.bU("Add User",null,null,null,null,null,null,null,null)
 B.cu=new A.bU("\u05d0\u05d9\u05e9\u05d5\u05e8",null,null,null,null,null,null,null,null)
 B.X7=new A.w(!0,null,null,null,null,null,20,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.Zr=new A.bU("Please log in to continue",null,B.X7,null,null,null,null,null,null)
-B.Zs=new A.bU("\u05d0\u05d9\u05e9\u05d5\u05e8 \u05de\u05d7\u05d9\u05e7\u05d4",null,null,null,null,null,null,null,null)
-B.Zt=new A.bU("\u05d1\u05d1\u05e7\u05e9\u05d4 \u05d4\u05db\u05e0\u05e1 \u05e9\u05dd \u05e9\u05d5\u05ea\u05e3",null,null,null,null,null,null,null,null)
-B.Zu=new A.bU("\u05e2\u05e8\u05d9\u05db\u05ea \u05d4\u05d5\u05d3\u05e2\u05ea \u05d8\u05dc\u05d5\u05d5\u05d9\u05d6\u05d9\u05d4",null,null,null,null,null,null,null,null)
+B.Zs=new A.bU("Please log in to continue",null,B.X7,null,null,null,null,null,null)
+B.Zt=new A.bU("\u05d0\u05d9\u05e9\u05d5\u05e8 \u05de\u05d7\u05d9\u05e7\u05d4",null,null,null,null,null,null,null,null)
+B.Zu=new A.bU("\u05d1\u05d1\u05e7\u05e9\u05d4 \u05d4\u05db\u05e0\u05e1 \u05e9\u05dd \u05e9\u05d5\u05ea\u05e3",null,null,null,null,null,null,null,null)
+B.Zv=new A.bU("\u05e2\u05e8\u05d9\u05db\u05ea \u05d4\u05d5\u05d3\u05e2\u05ea \u05d8\u05dc\u05d5\u05d5\u05d9\u05d6\u05d9\u05d4",null,null,null,null,null,null,null,null)
 B.BG=new A.bU("\u05e9\u05d2\u05d9\u05d0\u05ea \u05d4\u05d6\u05de\u05e0\u05d4",null,null,null,null,null,null,null,null)
 B.BH=new A.bU("Home",null,null,null,null,null,null,null,null)
-B.Zv=new A.bU("Select date",null,null,null,null,null,null,null,null)
-B.Zw=new A.bU("Delete Holiday",null,null,null,null,null,null,null,null)
-B.Zy=new A.bU("Invalid Hour",null,null,null,null,null,null,null,null)
+B.Zw=new A.bU("Select date",null,null,null,null,null,null,null,null)
+B.Zx=new A.bU("Delete Holiday",null,null,null,null,null,null,null,null)
+B.Zz=new A.bU("Invalid Hour",null,null,null,null,null,null,null,null)
 B.fX=new A.bU("\u05e9\u05d2\u05d9\u05d0\u05d4",null,null,null,null,null,null,null,null)
-B.ZB=new A.bU("Remove User",null,null,null,null,null,null,null,null)
-B.ZC=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05d6\u05de\u05d9\u05df \u05d1\u05e2\u05d1\u05e8",null,null,null,null,null,null,null,null)
-B.ZD=new A.bU("Back",null,null,null,null,null,null,null,null)
-B.ZE=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05d6\u05de\u05d9\u05df \u05dc\u05e2\u05e6\u05de\u05da. \u05d1\u05d7\u05e8 \u05e9\u05d5\u05ea\u05e4.\u05d4 \u05d0\u05d7\u05e8.\u05ea \u05dc\u05d4\u05d6\u05de\u05e0\u05d4.",null,null,null,null,null,null,null,null)
-B.ZH=new A.bU("Go to home page",null,B.mi,null,null,null,null,null,null)
-B.ZI=new A.bU("Page Not Found",null,B.j2,null,null,null,null,null,null)
-B.ZJ=new A.bU("\u05d4\u05db\u05e0\u05e1 \u05d4\u05d5\u05d3\u05e2\u05d4",null,null,null,null,null,null,null,null)
-B.ZK=new A.bU("Add/Delete Holiday",null,null,null,null,null,null,null,null)
-B.ZL=new A.bU("\u05d4\u05ea\u05d7\u05d1\u05e8",null,null,null,null,null,null,null,null)
+B.ZC=new A.bU("Remove User",null,null,null,null,null,null,null,null)
+B.ZD=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05d6\u05de\u05d9\u05df \u05d1\u05e2\u05d1\u05e8",null,null,null,null,null,null,null,null)
+B.ZE=new A.bU("Back",null,null,null,null,null,null,null,null)
+B.ZF=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05d6\u05de\u05d9\u05df \u05dc\u05e2\u05e6\u05de\u05da. \u05d1\u05d7\u05e8 \u05e9\u05d5\u05ea\u05e4.\u05d4 \u05d0\u05d7\u05e8.\u05ea \u05dc\u05d4\u05d6\u05de\u05e0\u05d4.",null,null,null,null,null,null,null,null)
+B.ZI=new A.bU("Go to home page",null,B.mi,null,null,null,null,null,null)
+B.ZJ=new A.bU("Page Not Found",null,B.j2,null,null,null,null,null,null)
+B.ZK=new A.bU("\u05d4\u05db\u05e0\u05e1 \u05d4\u05d5\u05d3\u05e2\u05d4",null,null,null,null,null,null,null,null)
+B.ZL=new A.bU("Add/Delete Holiday",null,null,null,null,null,null,null,null)
+B.ZM=new A.bU("\u05d4\u05ea\u05d7\u05d1\u05e8",null,null,null,null,null,null,null,null)
 B.BJ=new A.bU("Change Password",null,null,null,null,null,null,null,null)
 B.BK=new A.bU("\u05d1\u05d9\u05d8\u05d5\u05dc",null,null,null,null,null,null,null,null)
-B.ZN=new A.bU("Invalid",null,null,null,null,null,null,null,null)
-B.ZO=new A.bU("\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05de\u05d7\u05d5\u05e7 \u05d4\u05d6\u05de\u05e0\u05d4 \u05e4\u05d7\u05d5\u05ea \u05de\u05d7\u05e6\u05d9 \u05e9\u05e2\u05d4 \u05de\u05e8\u05d0\u05e9",null,null,null,null,null,null,null,null)
+B.ZO=new A.bU("Invalid",null,null,null,null,null,null,null,null)
 B.ZP=new A.HS(0,"system")
 B.BL=new A.HS(1,"light")
 B.BM=new A.HS(2,"dark")
