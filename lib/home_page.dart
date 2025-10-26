@@ -49,7 +49,8 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    selectedDate = DateTime.now();
+    final now = DateTime.now();
+    selectedDate = _effectiveToday(now); // instead of DateTime.now()
 
     // Always subscribe to auth changes
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) async {
@@ -93,6 +94,19 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() => _managerResolved = false);
       _refreshManagerFlag();
     }
+  }
+
+  DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
+  DateTime _addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+
+  DateTime _effectiveToday(DateTime now) {
+    final base = _midnight(now);
+    return (now.hour >= 22) ? _addDays(base, 1) : base;
+  }
+
+  DateTime _effectiveTomorrow(DateTime now) {
+    final base = _midnight(now);
+    return (now.hour >= 22) ? _addDays(base, 2) : _addDays(base, 1);
   }
 
   @override
@@ -342,13 +356,9 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         final now = DateTime.now();
-        final base = DateTime(now.year, now.month, now.day);
-        final after2200 = now.hour >= 22;
+        final today = _effectiveToday(now);
+        final tomorrow = _effectiveTomorrow(now);
 
-        final today = after2200 ? base.add(const Duration(days: 1)) : base;
-        final tomorrow = after2200
-            ? base.add(const Duration(days: 2))
-            : base.add(const Duration(days: 1));
         if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
           // Swipe Right → go to tomorrow
           if (_isSameDay(selectedDate ?? today, today)) {
@@ -395,51 +405,37 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
                     flex: 1,
                     child: ElevatedButton(
                       onPressed: () {
-                        // Compute effective "today/tomorrow" (shift after 22:00)
                         final now = DateTime.now();
-                        final base = DateTime(now.year, now.month, now.day);
-                        final after2200 = now.hour >= 22;
-
-                        final effectiveToday = after2200
-                            ? base.add(const Duration(days: 1))
-                            : base;
-                        final effectiveTomorrow = after2200
-                            ? base.add(const Duration(days: 2))
-                            : base.add(const Duration(days: 1));
+                        final effectiveToday = _effectiveToday(now);
+                        final effectiveTomorrow = _effectiveTomorrow(now);
 
                         final showing = (selectedDate ?? effectiveToday);
-                        final bool isShowingToday =
+                        final isShowingToday =
                             _isSameDay(showing, effectiveToday);
-
-                        final DateTime target =
+                        final target =
                             isShowingToday ? effectiveTomorrow : effectiveToday;
 
                         updateSelectedDate(context, target);
                       },
                       child: Builder(builder: (_) {
                         final now = DateTime.now();
-                        final base = DateTime(now.year, now.month, now.day);
-                        final after2200 = now.hour >= 22;
-
-                        final effectiveToday = after2200
-                            ? base.add(const Duration(days: 1))
-                            : base;
-                        final effectiveTomorrow = after2200
-                            ? base.add(const Duration(days: 2))
-                            : base.add(const Duration(days: 1));
+                        final effectiveToday = _effectiveToday(now);
+                        final effectiveTomorrow = _effectiveTomorrow(now);
 
                         final showing = (selectedDate ?? effectiveToday);
                         final dayNumber = DateFormat('dd').format(showing);
-
+                        final bool after2200 = now.hour >= 22;
+                        final String todayWord = after2200 ? "מחר" : "היום";
+                        final String tomorrowWord =
+                            after2200 ? "מחרתיים" : "מחר";
                         String label;
                         if (_isSameDay(showing, effectiveToday)) {
-                          label = "היום - $dayNumber";
+                          label = "$todayWord - $dayNumber";
                         } else if (_isSameDay(showing, effectiveTomorrow)) {
-                          label = "מחר - $dayNumber";
+                          label = "$tomorrowWord - $dayNumber";
                         } else {
-                          label = dayNumber; // fallback
+                          label = dayNumber; // fallback for other dates
                         }
-
                         return Text(label);
                       }),
                     ),
