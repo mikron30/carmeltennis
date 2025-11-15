@@ -127,8 +127,8 @@ class CourtReservationsState extends State<CourtReservations> {
               partner: data['partner'],
             );
             reservations.add(reservation);
-            // Assuming 'courtNumber' is a 1-based index
-            int courtIndex = reservation.court - 1;
+            // Map DB court number (rightmost = 1) to UI index (leftmost = 0)
+            int courtIndex = numberOfCourts - reservation.court;
             courtsReservations[courtIndex][reservation.time] = {
               'isReserved': true,
               'userName': reservation.user,
@@ -332,12 +332,15 @@ class CourtReservationsState extends State<CourtReservations> {
         // Format the selected date to match the Firestore document ID format (e.g., 'yyyy-MM-dd')
         String formattedDate =
             "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
+        // Map UI column number (leftmost = 1) to DB court number (rightmost = 1)
+        int totalCourts = await _determineNumberOfCourts(selectedDate);
+        int dbCourtNumber = totalCourts - courtNumber + 1;
 
         // Create a query to check for an existing reservation with the same court and hour
         final existingReservationQuery = FirebaseFirestore.instance
             .collection('reservations')
             .where('date', isEqualTo: formattedDate)
-            .where('courtNumber', isEqualTo: courtNumber)
+            .where('courtNumber', isEqualTo: dbCourtNumber)
             .where('hour', isEqualTo: hour);
         bool isManager = widget.myUserName == "אודי אש" ||
             widget.myUserName == "רני לפלר" ||
@@ -410,9 +413,7 @@ class CourtReservationsState extends State<CourtReservations> {
                     await _showDeleteConfirmationDialog(context);
                 if (!mounted) return; // Check if still mounted after async call
                 if (confirmDelete) {
-                  int totalCourts =
-                      await _determineNumberOfCourts(selectedDate);
-                  int displayCourtNumber = totalCourts - courtNumber + 1;
+                  int displayCourtNumber = dbCourtNumber;
 
                   final originatorEmail = user.email!;
                   final originatorName = widget.myUserName ?? '';
@@ -430,7 +431,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   // If the partner and originator are the same, find first reservation user
                   if (partnerName == originatorName) {
                     realPartnerName = await getReservationUserName(
-                        formattedDate, courtNumber, hour);
+                        formattedDate, dbCourtNumber, hour);
                     partnerEmail = await UserManager.instance
                         .getEmailByUsername(realPartnerName);
                   }
@@ -449,6 +450,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   );
 
                   await firstDocument.reference.delete();
+                  // Update UI state using the original UI column index
                   courtsReservations[courtNumber - 1][hour] = {
                     'isReserved': false,
                     'userName': '',
@@ -572,7 +574,7 @@ class CourtReservationsState extends State<CourtReservations> {
                 // Create the reservation data including the date
                 final reservationData = {
                   'date': formattedDate, // Add the date to the reservation data
-                  'courtNumber': courtNumber,
+                  'courtNumber': dbCourtNumber,
                   'hour': hour,
                   'isReserved': true,
                   'userName': widget.myUserName!.trim(),
@@ -589,8 +591,7 @@ class CourtReservationsState extends State<CourtReservations> {
                 await updateLastFivePartners(
                     user.email!, widget.selectedPartner!.trim());
 
-                int totalCourts = await _determineNumberOfCourts(selectedDate);
-                int displayCourtNumber = totalCourts - courtNumber + 1;
+                int displayCourtNumber = dbCourtNumber;
 
                 final originatorEmail = user.email!;
                 final originatorName = widget.myUserName ?? '';
@@ -733,11 +734,11 @@ class CourtReservationsState extends State<CourtReservations> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // Court Columns
-                    for (int i = numberOfCourts - 1; i >= 0; i--)
+                    // Court Columns (leftmost = highest court, rightmost = 1)
+                    for (int i = 0; i < numberOfCourts; i++)
                       Expanded(
                         child: Center(
-                          child: Text('מגרש ${i + 1}'),
+                          child: Text('מגרש ${numberOfCourts - i}'),
                         ),
                       ),
                     // Time Column
