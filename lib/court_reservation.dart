@@ -580,12 +580,34 @@ class CourtReservationsState extends State<CourtReservations> {
                   'userName': widget.myUserName!.trim(),
                   'partner': widget.selectedPartner!.trim(),
                 };
+                // Optimistically update UI before the network round-trip.
+                final previousCell = Map<String, dynamic>.from(
+                  courtsReservations[courtNumber - 1][hour] ??
+                      {'isReserved': false, 'userName': '', 'partner': ''},
+                );
+                setState(() {
+                  courtsReservations[courtNumber - 1][hour] = {
+                    'isReserved': true,
+                    'userName': widget.myUserName!.trim(),
+                    'partner': widget.selectedPartner!.trim(),
+                  };
+                });
                 final reservationId = DateTime.now().toUtc().toIso8601String();
-                // Store the reservation in Firestore using the unique reservation ID
-                await FirebaseFirestore.instance
-                    .collection('reservations')
-                    .doc(reservationId)
-                    .set(reservationData);
+                try {
+                  // Store the reservation in Firestore using the unique reservation ID
+                  await FirebaseFirestore.instance
+                      .collection('reservations')
+                      .doc(reservationId)
+                      .set(reservationData);
+                } catch (e) {
+                  // Roll back optimistic UI update on failure
+                  if (mounted) {
+                    setState(() {
+                      courtsReservations[courtNumber - 1][hour] = previousCell;
+                    });
+                  }
+                  rethrow;
+                }
 
                 // Update the last 5 partners after the reservation is saved
                 await updateLastFivePartners(
