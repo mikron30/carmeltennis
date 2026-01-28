@@ -103043,7 +103043,7 @@ m(){this.ar()},
 D(a){var s=null,r=$.W,q=(r==null?$.W=$.aJ():r).aH("[DEFAULT]")
 A.at(q,$.b2(),!0)
 r=A.dF(new A.aE(q))
-return A.dt(s,new A.Hm(new A.aH8(this),A.dr(r,r.gcd().cO("tv")).fp("marquee").a6L(),s,t.FL),B.n,B.oe,s,s,s,48,s,s,s,s,s,s)}}
+return A.dt(s,new A.Hm(new A.aH8(this),A.dr(r,r.gcd().cO("tv")).fp("marquee").a6L(),s,t.FL),B.n,B.oe,s,s,s,120,s,s,s,s,s,s)}}
 A.aH8.prototype={
 $2(a,b){var s,r=null,q=b.b
 if(q==null)q=r
@@ -111402,7 +111402,7 @@ B.UK=new A.atr(1,"double")
 B.Yf=new A.w(!0,B.G_,null,"monospace",null,null,48,B.fb,null,null,null,null,null,null,null,null,null,B.Br,B.Hb,B.UK,null,"fallback style; consider putting your text in a Material",null,null,null,null)
 B.BF=new A.w(!1,null,null,null,null,null,14,B.l,null,-0.15,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.YN=new A.w(!1,null,null,null,null,null,15,B.l,null,-0.15,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.YY=new A.w(!0,B.eb,null,null,null,null,20,B.fa,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
+B.YY=new A.w(!0,B.eb,null,null,null,null,80,B.fa,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.Z1=new A.w(!0,B.f0,null,null,null,null,null,B.a8,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.WI=new A.w(!0,B.Z,null,".AppleSystemUIFont",null,null,null,null,null,null,null,null,null,null,null,null,null,B.h,null,null,null,"blackRedwoodCity displayLarge",null,null,null,null)
 B.Xb=new A.w(!0,B.Z,null,".AppleSystemUIFont",null,null,null,null,null,null,null,null,null,null,null,null,null,B.h,null,null,null,"blackRedwoodCity displayMedium",null,null,null,null)

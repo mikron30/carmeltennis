@@ -219,7 +219,7 @@ class _TvMarqueeState extends State<_TvMarquee> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: 120,
       color: Colors.white10,
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
@@ -237,7 +237,7 @@ class _TvMarqueeState extends State<_TvMarquee> {
                 display,
                 style: const TextStyle(
                   color: Colors.blue,
-                  fontSize: 20,
+                  fontSize: 80,
                   fontWeight: FontWeight.w600,
                 ),
               ),
