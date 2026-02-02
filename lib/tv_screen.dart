@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'court_reservation.dart';
 
@@ -205,21 +207,156 @@ class _TvMarquee extends StatefulWidget {
 
 class _TvMarqueeState extends State<_TvMarquee> {
   String _text = '';
+  String? _heatText;
+  Timer? _heatTimer;
+  final Dio _dio = Dio();
+  static const _heatRefreshInterval = Duration(minutes: 7);
+  static const double _clubLat = 32.7940;
+  static const double _clubLon = 34.9896;
 
   @override
   void initState() {
     super.initState();
+    _fetchHeatIndex();
+    _heatTimer = Timer.periodic(_heatRefreshInterval, (_) => _fetchHeatIndex());
   }
 
   @override
   void dispose() {
+    _heatTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _fetchHeatIndex() async {
+    try {
+      final response = await _dio.get(
+        'https://api.open-meteo.com/v1/forecast',
+        queryParameters: {
+          'latitude': _clubLat,
+          'longitude': _clubLon,
+          'current':
+              'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m',
+          'hourly': 'precipitation_probability',
+          'timezone': 'auto',
+        },
+      );
+      final data = response.data;
+      final current = data is Map ? data['current'] as Map? : null;
+      if (current == null) {
+        _setHeatText(null);
+        return;
+      }
+      final tempC = (current['temperature_2m'] as num?)?.toDouble();
+      final rh = (current['relative_humidity_2m'] as num?)?.toDouble();
+      final windSpeed = (current['wind_speed_10m'] as num?)?.toDouble();
+      final windDir = (current['wind_direction_10m'] as num?)?.toDouble();
+      final currentTime = current['time'] as String?;
+      final nextHourProb = _nextHourPrecipProbability(
+        data,
+        currentTime,
+      );
+      if (tempC == null ||
+          rh == null ||
+          windSpeed == null ||
+          windDir == null ||
+          nextHourProb == null) {
+        _setHeatText(null);
+        return;
+      }
+      final hiC = _computeHeatIndexC(tempC, rh);
+      final label = _heatLevelLabel(hiC);
+      final hiRounded = hiC.round();
+      final windDirText = _windDirectionHebrew(windDir);
+      final windRounded = windSpeed.round();
+      final rainProbRounded = nextHourProb.round();
+      _setHeatText(
+        'עומס חום: ${hiRounded}° – $label | סיכוי לגשם בשעה הקרובה: ${rainProbRounded}% | רוח: ${windRounded} קמ״ש $windDirText',
+      );
+    } catch (_) {
+      _setHeatText(null);
+    }
+  }
+
+  void _setHeatText(String? value) {
+    if (!mounted) return;
+    setState(() {
+      _heatText = value;
+    });
+  }
+
+  double _computeHeatIndexC(double tempC, double rh) {
+    final tempF = tempC * 9 / 5 + 32;
+    if (tempF < 80) {
+      return tempC;
+    }
+    final t = tempF;
+    final r = rh;
+    double hi = -42.379 +
+        2.04901523 * t +
+        10.14333127 * r +
+        -0.22475541 * t * r +
+        -0.00683783 * t * t +
+        -0.05481717 * r * r +
+        0.00122874 * t * t * r +
+        0.00085282 * t * r * r +
+        -0.00000199 * t * t * r * r;
+    if (r < 13 && t >= 80 && t <= 112) {
+      final adj = ((13 - r) / 4) * sqrt((17 - (t - 95).abs()) / 17);
+      hi -= adj;
+    } else if (r > 85 && t >= 80 && t <= 87) {
+      final adj = ((r - 85) / 10) * ((87 - t) / 5);
+      hi += adj;
+    }
+    return (hi - 32) * 5 / 9;
+  }
+
+  String _heatLevelLabel(double hiC) {
+    if (hiC < 27) return 'נוח';
+    if (hiC < 32) return 'זהירות';
+    if (hiC < 41) return 'זהירות מוגברת';
+    if (hiC < 54) return 'סכנה';
+    return 'סכנה חמורה';
+  }
+
+  double? _nextHourPrecipProbability(Object? data, String? currentTime) {
+    if (data is! Map || currentTime == null) return null;
+    final hourly = data['hourly'] as Map?;
+    if (hourly == null) return null;
+    final times = hourly['time'] as List?;
+    final probs = hourly['precipitation_probability'] as List?;
+    if (times == null || probs == null || times.length != probs.length) {
+      return null;
+    }
+    final now = DateTime.tryParse(currentTime);
+    if (now == null) return null;
+    for (var i = 0; i < times.length; i++) {
+      final timeString = times[i] as String?;
+      final time = timeString == null ? null : DateTime.tryParse(timeString);
+      if (time == null) continue;
+      if (time.isAfter(now)) {
+        final value = probs[i];
+        if (value is num) return value.toDouble();
+      }
+    }
+    return null;
+  }
+
+  String _windDirectionHebrew(double degrees) {
+    final d = degrees % 360;
+    if (d >= 337.5 || d < 22.5) return 'צפון';
+    if (d < 67.5) return 'צפון-מזרח';
+    if (d < 112.5) return 'מזרח';
+    if (d < 157.5) return 'דרום-מזרח';
+    if (d < 202.5) return 'דרום';
+    if (d < 247.5) return 'דרום-מערב';
+    if (d < 292.5) return 'מערב';
+    return 'צפון-מערב';
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 120,
+      height: _heatText == null ? 120 : 160,
       color: Colors.white10,
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
@@ -233,13 +370,28 @@ class _TvMarqueeState extends State<_TvMarquee> {
           return Directionality(
             textDirection: TextDirection.rtl,
             child: Center(
-              child: Text(
-                display,
-                style: const TextStyle(
-                  color: Colors.blue,
-                  fontSize: 80,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_heatText != null)
+                    Text(
+                      _heatText!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 40,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  Text(
+                    display,
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontSize: 80,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
