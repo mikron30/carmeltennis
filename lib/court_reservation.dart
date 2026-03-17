@@ -928,7 +928,7 @@ class CourtReservationsState extends State<CourtReservations> {
       final String label = isReserved
           ? (isTv
               ? displayMessage
-              : (isManager || isMine ? displayMessage : "תפוס"))
+              : displayMessage)
           : (isTv ? "פנוי" : (isPast ? "סגור" : "פנוי"));
 
       final Color bgColor = isReserved
