@@ -4,6 +4,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // Import the generated options file
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
+import 'package:firebase_ui_localizations/firebase_ui_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -108,7 +109,8 @@ class App extends StatelessWidget {
           routerConfig: _router,
           locale: const Locale('he'),
           supportedLocales: const [Locale('he'), Locale('en')],
-          localizationsDelegates: const [
+          localizationsDelegates: [
+            FirebaseUILocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,

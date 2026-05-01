@@ -51,14 +51,17 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   StreamSubscription<QuerySnapshot>? _selectedDaySub;
   StreamSubscription<QuerySnapshot>? _companionDaySub;
+  StreamSubscription<QuerySnapshot>? _myUpcomingSub;
   List<_Reservation> _selectedDayReservations = [];
   Map<int, Map<int, _Reservation>> _selectedDayByCell = {};
+  List<_Reservation> _myUpcoming = [];
   int _companionEveningCount = 0;
 
   String? _preview;
   Timer? _previewTimer;
   String? _pendingKey;
   String? _failedKey;
+  bool _loadingDay = false;
 
   final _toast = ToastController();
   final _resManager = ReservationManager();
@@ -99,6 +102,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     _previewTimer?.cancel();
     _selectedDaySub?.cancel();
     _companionDaySub?.cancel();
+    _myUpcomingSub?.cancel();
     _toast.dismiss();
     super.dispose();
   }
@@ -119,6 +123,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   Future<void> _refreshCourtsThenLoad() async {
+    if (!mounted) return;
+    setState(() => _loadingDay = true);
     final type = await getHolidayType(_selectedDate);
     final courts = numberOfCourtsFor(_selectedDate, type);
     if (!mounted) return;
@@ -132,6 +138,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   void _resubscribe() {
     _selectedDaySub?.cancel();
     _companionDaySub?.cancel();
+    _myUpcomingSub?.cancel();
 
     final selectedKey = _fmt(_selectedDate);
     _selectedDaySub = FirebaseFirestore.instance
@@ -148,6 +155,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       setState(() {
         _selectedDayReservations = list;
         _selectedDayByCell = byCell;
+        _loadingDay = false;
       });
     });
 
@@ -177,6 +185,30 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       }
       setState(() => _companionEveningCount = n);
     });
+
+    if (me.isNotEmpty) {
+      final todayKey = _fmt(today);
+      final tomorrowKey = _fmt(tomorrow);
+      _myUpcomingSub = FirebaseFirestore.instance
+          .collection('reservations')
+          .where('date', whereIn: [todayKey, tomorrowKey])
+          .snapshots()
+          .listen((snap) {
+        if (!mounted) return;
+        final list = <_Reservation>[];
+        for (final doc in snap.docs) {
+          final r = _Reservation.fromDoc(doc);
+          if (r.involves(me)) list.add(r);
+        }
+        list.sort((a, b) {
+          final cmp = a.date.compareTo(b.date);
+          return cmp != 0 ? cmp : a.hour.compareTo(b.hour);
+        });
+        setState(() => _myUpcoming = list);
+      });
+    } else {
+      _myUpcoming = [];
+    }
   }
 
   HeroDay get _heroDay {
@@ -187,19 +219,15 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   NextUpInfo? get _myNextUp {
     if (widget.myUserName == null) return null;
     final now = DateTime.now();
-    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(now));
-    for (final hour in kHours) {
-      if (viewingToday && hour < now.hour) continue;
-      final mine = _selectedDayReservations.firstWhere(
-        (r) => r.hour == hour && r.involves(widget.myUserName!),
-        orElse: () => _Reservation.empty(),
-      );
-      if (mine.hour < 0) continue;
-      final partner = mine.userName == widget.myUserName ? mine.partner : mine.userName;
+    final todayKey = _fmt(_effectiveToday(now));
+    for (final r in _myUpcoming) {
+      if (r.date == todayKey && r.hour < now.hour) continue;
+      final partner = r.userName == widget.myUserName ? r.partner : r.userName;
       return NextUpInfo(
-        hour: hour,
-        courtNumber: mine.courtNumber,
+        hour: r.hour,
+        courtNumber: r.courtNumber,
         partnerShort: _shortName(partner),
+        dateLabel: r.date == todayKey ? null : 'מחר',
       );
     }
     return null;
@@ -715,6 +743,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
                   !_partnerHasReservationOnSelectedDay(_selectedPartner!),
               usedEvenings: _usedEvenings,
               darkMode: widget.darkMode,
+              onRefreshTap: _refreshCourtsThenLoad,
               onThemeToggle: () => widget.onDarkModeToggle(!widget.darkMode),
             ),
             RecentsStrip(
@@ -753,6 +782,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
               numberOfCourts: _numberOfCourts,
               nowHour: nowHour,
               slotBuilder: _resolveSlot,
+              loading: _loadingDay,
             ),
           ],
         ),
@@ -768,6 +798,7 @@ class _BookingValidationError implements Exception {
 
 class _Reservation {
   final String docId;
+  final String date;
   final int courtNumber;
   final int hour;
   final String userName;
@@ -775,6 +806,7 @@ class _Reservation {
 
   const _Reservation({
     required this.docId,
+    required this.date,
     required this.courtNumber,
     required this.hour,
     required this.userName,
@@ -782,12 +814,13 @@ class _Reservation {
   });
 
   factory _Reservation.empty() =>
-      const _Reservation(docId: '', courtNumber: -1, hour: -1, userName: '', partner: '');
+      const _Reservation(docId: '', date: '', courtNumber: -1, hour: -1, userName: '', partner: '');
 
   factory _Reservation.fromDoc(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return _Reservation(
       docId: doc.id,
+      date: (data['date'] ?? '') as String,
       courtNumber: (data['courtNumber'] ?? 0) as int,
       hour: (data['hour'] ?? 0) as int,
       userName: (data['userName'] ?? '') as String,

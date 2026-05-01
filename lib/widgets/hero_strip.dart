@@ -6,10 +6,12 @@ class NextUpInfo {
   final int hour;
   final int courtNumber;
   final String partnerShort;
+  final String? dateLabel; // null when next-up is today; e.g. 'מחר' otherwise
   const NextUpInfo({
     required this.hour,
     required this.courtNumber,
     required this.partnerShort,
+    this.dateLabel,
   });
 }
 
@@ -126,6 +128,15 @@ class HeroStrip extends StatelessWidget {
                   letterSpacing: 0.6,
                 ),
               ),
+              if (n.dateLabel != null)
+                TextSpan(
+                  text: '${n.dateLabel} ',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.96),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               TextSpan(
                 text: '${n.hour.toString().padLeft(2, '0')}:00',
                 style: const TextStyle(

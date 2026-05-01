@@ -29,12 +29,14 @@ class TimeGrid extends StatelessWidget {
   final int numberOfCourts;
   final int? nowHour; // null when not viewing today
   final SlotBuilder slotBuilder;
+  final bool loading;
 
   const TimeGrid({
     super.key,
     required this.numberOfCourts,
     required this.nowHour,
     required this.slotBuilder,
+    this.loading = false,
   });
 
   @override
@@ -58,6 +60,16 @@ class TimeGrid extends StatelessWidget {
       child: Column(
         children: [
           _CourtHeader(numberOfCourts: numberOfCourts, tokens: tokens),
+          SizedBox(
+            height: 2,
+            child: loading
+                ? LinearProgressIndicator(
+                    minHeight: 2,
+                    backgroundColor: tokens.line,
+                    valueColor: AlwaysStoppedAnimation(tokens.clay),
+                  )
+                : null,
+          ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

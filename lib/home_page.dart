@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'booking_screen_v31.dart';
+import 'booking_tokens.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
 import 'hoilday.dart';
@@ -259,11 +260,9 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
       return Scaffold(body: _buildLoginScreen());
     }
 
-    // 2) Logged in but manager flag not resolved yet → small spinner
+    // 2) Logged in but manager flag not resolved yet → branded loading
     if (!_managerResolved) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return Scaffold(body: _buildAuthLoadingScreen());
     }
 
     // 3) Logged in and resolved → normal UI
@@ -283,22 +282,67 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildAuthLoadingScreen() {
+    final tokens = BookingTokens.of(context);
+    return Container(
+      color: tokens.bg,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'מועדון הכרמל',
+              style: TextStyle(
+                color: tokens.clay,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation(tokens.clay),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'טוען…',
+              style: TextStyle(
+                color: tokens.ink2,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLoginScreen() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
-            'Please log in to continue',
+            'התחבר.י כדי להמשיך',
             style: TextStyle(fontSize: 20),
           ),
           const SizedBox(height: 20),
-          AuthFunc(
-            loggedIn: false,
-            signOut: () async {
-              await FirebaseAuth.instance.signOut();
-              setState(() {});
-            },
+          Center(
+            child: AuthFunc(
+              loggedIn: false,
+              signOut: () async {
+                await FirebaseAuth.instance.signOut();
+                setState(() {});
+              },
+            ),
           ),
         ],
       ),

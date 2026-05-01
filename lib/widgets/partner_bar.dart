@@ -8,6 +8,7 @@ class PartnerBar extends StatelessWidget {
   final bool darkMode;
   // Restore-last-week disabled — see docs/restore_last_week.md.
   final VoidCallback? onRestoreTap;
+  final VoidCallback onRefreshTap;
   final VoidCallback onThemeToggle;
 
   const PartnerBar({
@@ -17,6 +18,7 @@ class PartnerBar extends StatelessWidget {
     required this.usedEvenings,
     required this.darkMode,
     this.onRestoreTap,
+    required this.onRefreshTap,
     required this.onThemeToggle,
   });
 
@@ -141,6 +143,8 @@ class PartnerBar extends StatelessWidget {
           // _IconBtn(glyph: '↻', tooltip: 'כמו בשבוע שעבר', onTap: onRestoreTap!, tokens: tokens),
           // const SizedBox(width: 3),
           // Cycle-partner button removed — added no value over the recents strip.
+          _IconBtn(glyph: '⟳', tooltip: 'רענן', onTap: onRefreshTap, tokens: tokens),
+          const SizedBox(width: 3),
           _ThemeBtn(darkMode: darkMode, tokens: tokens, onTap: onThemeToggle),
         ],
       ),

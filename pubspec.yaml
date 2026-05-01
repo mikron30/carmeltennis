@@ -45,6 +45,7 @@ dependencies:
   cloud_firestore: ^4.15.5
   provider: ^6.0.5
   firebase_ui_auth: ^1.9.1
+  firebase_ui_localizations: ^1.11.0
   shared_preferences: ^2.0.6
   intl: 0.20.2
   mailer: ^6.1.0
