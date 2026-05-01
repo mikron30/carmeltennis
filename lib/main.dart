@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // Import the generated options file
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,7 @@ import 'change_password.dart';
 import 'theme_controller.dart';
 import 'tv_screen.dart';
 import 'tv_message_editor.dart';
+import 'booking_tokens.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,38 +44,51 @@ void navigateToChangePassword(BuildContext context) {
 }
 
 ThemeData buildLightTheme() {
-  // Start from a consistent base
+  const tokens = BookingTokens.light;
   final base = ThemeData(
     brightness: Brightness.light,
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: tokens.clay,
+      brightness: Brightness.light,
+      primary: tokens.clay,
+      surface: tokens.surface,
+    ),
+    scaffoldBackgroundColor: tokens.bg,
     visualDensity: VisualDensity.adaptivePlatformDensity,
+    extensions: const [tokens],
   );
 
-  // Apply the same font to the base textTheme (keeps inherit:true everywhere)
-  final text = GoogleFonts.robotoTextTheme(base.textTheme);
-
-  return base.copyWith(
-    textTheme: text,
+  final text = GoogleFonts.heeboTextTheme(base.textTheme).apply(
+    bodyColor: tokens.ink,
+    displayColor: tokens.ink,
   );
+
+  return base.copyWith(textTheme: text);
 }
 
 ThemeData buildDarkTheme() {
+  const tokens = BookingTokens.dark;
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
+      seedColor: tokens.clay,
       brightness: Brightness.dark,
+      primary: tokens.clay,
+      surface: tokens.surface,
     ),
+    scaffoldBackgroundColor: tokens.bg,
     visualDensity: VisualDensity.adaptivePlatformDensity,
+    extensions: const [tokens],
   );
 
-  final text = GoogleFonts.robotoTextTheme(base.textTheme);
-
-  return base.copyWith(
-    textTheme: text,
+  final text = GoogleFonts.heeboTextTheme(base.textTheme).apply(
+    bodyColor: tokens.ink,
+    displayColor: tokens.ink,
   );
+
+  return base.copyWith(textTheme: text);
 }
 
 // App with live dark mode switching via ThemeController
@@ -91,6 +106,13 @@ class App extends StatelessWidget {
           darkTheme: buildDarkTheme(), // <-- use helper
           themeMode: ThemeController.instance.mode,
           routerConfig: _router,
+          locale: const Locale('he'),
+          supportedLocales: const [Locale('he'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
 
           // Optional: disable theme animation completely (prevents any lerp)
           // themeAnimationDuration: Duration.zero,
