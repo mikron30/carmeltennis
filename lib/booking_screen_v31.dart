@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'booking_limits.dart';
 import 'booking_tokens.dart';
 import 'booking_window.dart';
 import 'email_service.dart';
@@ -18,6 +19,8 @@ import 'widgets/recents_strip.dart';
 import 'widgets/slot_button.dart';
 import 'widgets/time_grid.dart';
 import 'widgets/toast.dart';
+
+const String _adminBookingLabel = 'הזמנת מנהל';
 
 class BookingScreenV31 extends StatefulWidget {
   final bool isManager;
@@ -50,12 +53,12 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   String _holidayType = 'רגיל';
 
   StreamSubscription<QuerySnapshot>? _selectedDaySub;
-  StreamSubscription<QuerySnapshot>? _companionDaySub;
+  StreamSubscription<QuerySnapshot>? _weekEveningSub;
   StreamSubscription<QuerySnapshot>? _myUpcomingSub;
   List<_Reservation> _selectedDayReservations = [];
   Map<int, Map<int, _Reservation>> _selectedDayByCell = {};
   List<_Reservation> _myUpcoming = [];
-  int _companionEveningCount = 0;
+  int _myWeeklyEveningCount = 0;
 
   String? _preview;
   Timer? _previewTimer;
@@ -74,6 +77,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     super.initState();
     final now = DateTime.now();
     _selectedDate = _effectiveToday(now);
+    _selectedPartner = _firstSelectablePartner(widget.lastFivePartners);
     _refreshCourtsThenLoad();
     _loadWeather();
   }
@@ -90,10 +94,11 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   @override
   void didUpdateWidget(covariant BookingScreenV31 oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final initialPartner = _firstSelectablePartner(widget.lastFivePartners);
     if (oldWidget.lastFivePartners != widget.lastFivePartners &&
         _selectedPartner == null &&
-        widget.lastFivePartners.isNotEmpty) {
-      setState(() => _selectedPartner = widget.lastFivePartners.first);
+        initialPartner != null) {
+      setState(() => _selectedPartner = initialPartner);
     }
   }
 
@@ -101,7 +106,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   void dispose() {
     _previewTimer?.cancel();
     _selectedDaySub?.cancel();
-    _companionDaySub?.cancel();
+    _weekEveningSub?.cancel();
     _myUpcomingSub?.cancel();
     _toast.dismiss();
     super.dispose();
@@ -113,10 +118,12 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final base = _midnight(now);
     return now.hour >= 22 ? _addDays(base, 1) : base;
   }
+
   DateTime _effectiveTomorrow(DateTime now) {
     final base = _midnight(now);
     return now.hour >= 22 ? _addDays(base, 2) : _addDays(base, 1);
   }
+
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
   String _fmt(DateTime d) =>
@@ -137,7 +144,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   void _resubscribe() {
     _selectedDaySub?.cancel();
-    _companionDaySub?.cancel();
+    _weekEveningSub?.cancel();
     _myUpcomingSub?.cancel();
 
     final selectedKey = _fmt(_selectedDate);
@@ -162,31 +169,27 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final now = DateTime.now();
     final today = _effectiveToday(now);
     final tomorrow = _effectiveTomorrow(now);
-    final companion =
-        _isSameDay(_selectedDate, today) ? tomorrow : today;
-    final compKey = _fmt(companion);
     final me = widget.myUserName ?? '';
-    _companionDaySub = FirebaseFirestore.instance
-        .collection('reservations')
-        .where('date', isEqualTo: compKey)
-        .where('hour', whereIn: kEveningHours.toList())
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      int n = 0;
-      for (final doc in snap.docs) {
-        final data = doc.data();
-        final user = (data['userName'] ?? '') as String;
-        final partner = (data['partner'] ?? '') as String;
-        if (user.trim().toLowerCase() == me.trim().toLowerCase() ||
-            partner.trim().toLowerCase() == me.trim().toLowerCase()) {
-          n++;
-        }
-      }
-      setState(() => _companionEveningCount = n);
-    });
-
     if (me.isNotEmpty) {
+      final weekStartKey = bookingDateKey(startOfBookingWeek(_selectedDate));
+      final weekEndKey = bookingDateKey(endOfBookingWeek(_selectedDate));
+      _weekEveningSub = FirebaseFirestore.instance
+          .collection('reservations')
+          .where('date', isGreaterThanOrEqualTo: weekStartKey)
+          .where('date', isLessThanOrEqualTo: weekEndKey)
+          .snapshots()
+          .listen((snap) {
+        if (!mounted) return;
+        final counted = <String>{};
+        for (final doc in snap.docs) {
+          final r = _Reservation.fromDoc(doc);
+          if (isEveningQuotaHour(r.hour) && r.involves(me)) {
+            counted.add(r.docId);
+          }
+        }
+        setState(() => _myWeeklyEveningCount = counted.length);
+      });
+
       final todayKey = _fmt(today);
       final tomorrowKey = _fmt(tomorrow);
       _myUpcomingSub = FirebaseFirestore.instance
@@ -194,19 +197,20 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
           .where('date', whereIn: [todayKey, tomorrowKey])
           .snapshots()
           .listen((snap) {
-        if (!mounted) return;
-        final list = <_Reservation>[];
-        for (final doc in snap.docs) {
-          final r = _Reservation.fromDoc(doc);
-          if (r.involves(me)) list.add(r);
-        }
-        list.sort((a, b) {
-          final cmp = a.date.compareTo(b.date);
-          return cmp != 0 ? cmp : a.hour.compareTo(b.hour);
-        });
-        setState(() => _myUpcoming = list);
-      });
+            if (!mounted) return;
+            final list = <_Reservation>[];
+            for (final doc in snap.docs) {
+              final r = _Reservation.fromDoc(doc);
+              if (r.involves(me)) list.add(r);
+            }
+            list.sort((a, b) {
+              final cmp = a.date.compareTo(b.date);
+              return cmp != 0 ? cmp : a.hour.compareTo(b.hour);
+            });
+            setState(() => _myUpcoming = list);
+          });
     } else {
+      _myWeeklyEveningCount = 0;
       _myUpcoming = [];
     }
   }
@@ -226,7 +230,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       return NextUpInfo(
         hour: r.hour,
         courtNumber: r.courtNumber,
-        partnerShort: _shortName(partner),
+        partnerShort: _displayReservationName(partner),
         dateLabel: r.date == todayKey ? null : 'מחר',
       );
     }
@@ -236,11 +240,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   int get _usedEvenings {
     final me = widget.myUserName ?? '';
     if (me.isEmpty) return 0;
-    int n = _companionEveningCount;
-    for (final r in _selectedDayReservations) {
-      if (kEveningHours.contains(r.hour) && r.involves(me)) n++;
-    }
-    return n.clamp(0, 3);
+    return _myWeeklyEveningCount.clamp(0, kWeeklyEveningQuota);
   }
 
   bool _partnerHasReservationOnSelectedDay(String name) {
@@ -248,14 +248,16 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   }
 
   bool _isLocked(int hour) {
-    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
+    final viewingToday =
+        _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
     if (!viewingToday) return false;
     final delta = hour - DateTime.now().hour;
     return delta > 0 && delta <= 3;
   }
 
   bool _isPast(int hour) {
-    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
+    final viewingToday =
+        _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
     if (!viewingToday) return false;
     final reservationDt = DateTime(
       _selectedDate.year,
@@ -290,7 +292,18 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final isFailed = _failedKey == key;
 
     if (reservation.hour >= 0) {
-      final mine = widget.myUserName != null && reservation.involves(widget.myUserName!);
+      final mine =
+          widget.myUserName != null && reservation.involves(widget.myUserName!);
+      final customLabel = _customBookingLabel(reservation.partner);
+      if (customLabel != null) {
+        return SlotData(
+          state: mine
+              ? (_isLocked(hour) ? SlotState.mineLocked : SlotState.mine)
+              : SlotState.taken,
+          primaryLabel: customLabel,
+          onTap: () => _handleTap(courtUiIndex, hour),
+        );
+      }
       if (mine) {
         final state = _isLocked(hour) ? SlotState.mineLocked : SlotState.mine;
         final partner = reservation.userName == widget.myUserName
@@ -311,7 +324,9 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       );
     }
 
-    if (isPending) return SlotData(state: SlotState.pending, primaryLabel: 'פנוי');
+    if (isPending) {
+      return SlotData(state: SlotState.pending, primaryLabel: 'פנוי');
+    }
     if (isFailed) {
       return SlotData(
         state: SlotState.failed,
@@ -341,6 +356,42 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     return raw;
   }
 
+  String? _customBookingLabel(String raw) {
+    if (!raw.startsWith('!')) return null;
+    final label = raw.substring(1).trim();
+    return label.isEmpty ? _adminBookingLabel : label;
+  }
+
+  String _displayReservationName(String raw) {
+    final custom = _customBookingLabel(raw);
+    if (custom != null) return custom;
+    return _shortName(_displayPartner(raw));
+  }
+
+  String _partnerChipLabel(String name) {
+    if (name.trim() == _adminBookingLabel) return _adminBookingLabel;
+    return _shortName(name);
+  }
+
+  bool _isAdminBookingSelection(String value) {
+    return widget.isManager && value.trim() == _adminBookingLabel;
+  }
+
+  String? _firstSelectablePartner(Iterable<String> partners) {
+    for (final partner in partners) {
+      final trimmed = partner.trim();
+      if (trimmed.isEmpty) continue;
+      if (_isAdminBookingSelection(trimmed)) continue;
+      return partner;
+    }
+    return null;
+  }
+
+  bool _hasPartnerForBooking(String partner) {
+    final trimmed = partner.trim();
+    return trimmed.isNotEmpty && !_isAdminBookingSelection(trimmed);
+  }
+
   String _shortName(String fullName) {
     final n = fullName.trim();
     if (n.isEmpty) return n;
@@ -349,16 +400,63 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     return '${parts.first} ${parts.last.characters.first}.';
   }
 
+  Future<String?> _showAdminBookingDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('הזמנת מנהל'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(hintText: 'תיאור ההזמנה'),
+            onSubmitted: (_) {
+              Navigator.of(ctx).pop(controller.text.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('ביטול'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              child: const Text('אישור'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    final description = result?.trim();
+    if (description == null || description.isEmpty) return null;
+    return '!$description';
+  }
+
+  Future<void> _selectPartner(String value) async {
+    if (_isAdminBookingSelection(value)) {
+      final customMessage = await _showAdminBookingDialog();
+      if (!mounted || customMessage == null) return;
+      setState(() => _selectedPartner = customMessage);
+      return;
+    }
+    setState(() => _selectedPartner = value);
+  }
+
   void _handleTap(int courtUiIndex, int hour) async {
     final dbCourtNumber = _numberOfCourts - courtUiIndex;
     final reservation =
         _selectedDayByCell[dbCourtNumber]?[hour] ?? _Reservation.empty();
 
     if (reservation.hour >= 0) {
-      final mine = widget.myUserName != null && reservation.involves(widget.myUserName!);
+      final mine =
+          widget.myUserName != null && reservation.involves(widget.myUserName!);
       if (mine) {
         if (!widget.isManager && _isLocked(hour)) {
-          _toast.show(context, 'לא ניתן לבטל פחות מ-3 שעות לפני', kind: ToastKind.warn);
+          _toast.show(context, 'לא ניתן לבטל פחות מ-3 שעות לפני',
+              kind: ToastKind.warn);
           return;
         }
         _openCancelSheet(reservation, courtUiIndex, hour);
@@ -427,7 +525,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final myName = widget.myUserName;
     if (myName == null || myName.isEmpty) return false;
     final partner = _selectedPartner?.trim() ?? '';
-    if (partner.isEmpty) {
+    if (!_hasPartnerForBooking(partner)) {
       _toast.show(context, 'בחר/י שותפ.ה לפני ההזמנה', kind: ToastKind.warn);
       return false;
     }
@@ -436,7 +534,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       return false;
     }
     if (!widget.isManager && !BookingWindow.isOpenFor(_selectedDate)) {
-      _toast.show(context, 'ההזמנות לתאריך זה עדיין לא נפתחו', kind: ToastKind.warn);
+      _toast.show(context, 'ההזמנות לתאריך זה עדיין לא נפתחו',
+          kind: ToastKind.warn);
       return false;
     }
     return true;
@@ -445,7 +544,11 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   Future<void> _commitBooking(int courtUiIndex, int hour) async {
     final user = FirebaseAuth.instance.currentUser!;
     final myName = widget.myUserName!;
-    final partner = _selectedPartner!.trim();
+    final partner = _selectedPartner?.trim() ?? '';
+    if (!_hasPartnerForBooking(partner)) {
+      throw _BookingValidationError('בחר/י שותפ.ה לפני ההזמנה');
+    }
+    final partnerDisplayName = _displayPartner(partner);
 
     if (!widget.isManager) {
       final results = await Future.wait([
@@ -458,9 +561,17 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       }
     }
 
-    if (!widget.isManager && kEveningHours.contains(hour)) {
-      if (_usedEvenings >= 3) {
-        throw _BookingValidationError('הגעת לתקרת 3 ערבים השבוע');
+    if (!widget.isManager && isEveningQuotaHour(hour)) {
+      final counts = await Future.wait([
+        _resManager.countWeeklyEveningReservations(myName, _selectedDate),
+        _resManager.countWeeklyEveningReservations(partner, _selectedDate),
+      ]);
+      if (counts[0] >= kWeeklyEveningQuota ||
+          counts[1] >= kWeeklyEveningQuota) {
+        final blocking = counts[0] >= kWeeklyEveningQuota ? myName : partner;
+        throw _BookingValidationError(
+          'ל-$blocking כבר יש 3 הזמנות השבוע בשעות 18:00, 19:00 ו-20:00',
+        );
       }
     }
 
@@ -482,17 +593,21 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     await _updateLastFivePartners(user.email!, partner.trim());
 
-    final partnerEmail = await UserManager.instance.getEmailByUsername(partner);
+    final partnerEmail = partner.startsWith('!')
+        ? null
+        : await UserManager.instance.getEmailByUsername(partner);
     final prefs = await Future.wait([
       _doesUserWantEmails(user.email!),
-      partnerEmail != null ? _doesUserWantEmails(partnerEmail) : Future.value(false),
+      partnerEmail != null
+          ? _doesUserWantEmails(partnerEmail)
+          : Future.value(false),
     ]);
     await sendReservationEmails(
       originatorEmail: user.email!,
       originatorName: myName,
       originatorWantsEmail: prefs[0],
       partnerEmail: partnerEmail,
-      partnerName: partner,
+      partnerName: partnerDisplayName,
       partnerWantsEmail: prefs[1],
       courtNumber: dbCourtNumber,
       date: _selectedDate,
@@ -504,11 +619,17 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   Future<void> _cancelReservation(_Reservation r) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final partnerName = (r.userName == widget.myUserName) ? r.partner : r.userName;
-    final partnerEmail = await UserManager.instance.getEmailByUsername(partnerName);
+    final rawPartnerName =
+        (r.userName == widget.myUserName) ? r.partner : r.userName;
+    final partnerName = _displayPartner(rawPartnerName);
+    final partnerEmail = rawPartnerName.startsWith('!')
+        ? null
+        : await UserManager.instance.getEmailByUsername(partnerName);
     final prefs = await Future.wait([
       _doesUserWantEmails(user.email!),
-      partnerEmail != null ? _doesUserWantEmails(partnerEmail) : Future.value(false),
+      partnerEmail != null
+          ? _doesUserWantEmails(partnerEmail)
+          : Future.value(false),
     ]);
     await sendReservationEmails(
       originatorEmail: user.email!,
@@ -543,7 +664,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     return false;
   }
 
-  Future<void> _updateLastFivePartners(String userEmail, String newPartner) async {
+  Future<void> _updateLastFivePartners(
+      String userEmail, String newPartner) async {
     if (newPartner.startsWith('!')) return;
     final query = await FirebaseFirestore.instance
         .collection('users_2024')
@@ -646,7 +768,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   void _onDayChanged(HeroDay day) {
     final now = DateTime.now();
-    final target = day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
+    final target =
+        day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
     if (_isSameDay(target, _selectedDate)) return;
     setState(() => _selectedDate = target);
     _refreshCourtsThenLoad();
@@ -660,7 +783,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked == null) return;
-    setState(() => _selectedDate = DateTime(picked.year, picked.month, picked.day));
+    setState(
+        () => _selectedDate = DateTime(picked.year, picked.month, picked.day));
     _refreshCourtsThenLoad();
   }
 
@@ -704,7 +828,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       },
     );
     if (picked != null && picked.isNotEmpty) {
-      setState(() => _selectedPartner = picked);
+      await _selectPartner(picked);
     }
   }
 
@@ -716,11 +840,15 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     final recents = widget.lastFivePartners.map((name) {
       return RecentPartner(
-        name: _shortName(name),
+        name: _partnerChipLabel(name),
         available: !_partnerHasReservationOnSelectedDay(name),
       );
     }).toList();
-    final selectedShort = _selectedPartner == null ? null : _shortName(_selectedPartner!);
+    final selectedShort = _selectedPartner == null
+        ? null
+        : _displayReservationName(_selectedPartner!);
+    final selectedPartnerLabel =
+        _selectedPartner == null ? null : _displayPartner(_selectedPartner!);
 
     return Container(
       color: tokens.bg,
@@ -738,7 +866,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
               onMenuTap: widget.onMenuTap,
             ),
             PartnerBar(
-              partnerName: _selectedPartner,
+              partnerName: selectedPartnerLabel,
               partnerAvailable: _selectedPartner != null &&
                   !_partnerHasReservationOnSelectedDay(_selectedPartner!),
               usedEvenings: _usedEvenings,
@@ -749,12 +877,12 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
             RecentsStrip(
               recents: recents,
               selected: selectedShort,
-              onSelect: (shortName) {
+              onSelect: (shortName) async {
                 final match = widget.lastFivePartners.firstWhere(
-                  (n) => _shortName(n) == shortName,
+                  (n) => _partnerChipLabel(n) == shortName,
                   orElse: () => shortName,
                 );
-                setState(() => _selectedPartner = match);
+                await _selectPartner(match);
               },
               onAddTap: _onAddPartnerTap,
             ),
@@ -768,7 +896,10 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
                     const SizedBox(width: 6),
                     Text(
                       DateFormat('d.M.yyyy').format(_selectedDate),
-                      style: TextStyle(color: tokens.ink2, fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: tokens.ink2,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
                     ),
                     const Spacer(),
                     TextButton(
@@ -813,8 +944,13 @@ class _Reservation {
     required this.partner,
   });
 
-  factory _Reservation.empty() =>
-      const _Reservation(docId: '', date: '', courtNumber: -1, hour: -1, userName: '', partner: '');
+  factory _Reservation.empty() => const _Reservation(
+      docId: '',
+      date: '',
+      courtNumber: -1,
+      hour: -1,
+      userName: '',
+      partner: '');
 
   factory _Reservation.fromDoc(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
