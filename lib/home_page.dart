@@ -2,16 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart'; // For GoRouter
+import 'package:go_router/go_router.dart';
 
-import 'app_state.dart';
-import 'court_reservation.dart';
-import 'date_selection.dart';
+import 'booking_screen_v31.dart';
+import 'booking_tokens.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
 import 'hoilday.dart';
-import 'package:intl/intl.dart'; // For date formatting
 import 'users_management.dart';
 import 'theme_controller.dart';
 import 'dart:async';
@@ -27,18 +24,10 @@ class HomePage extends StatefulWidget {
 
 class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   bool isManager = false;
-  DateTime? selectedDate;
-  String? selectedPartner;
-  List<String> suggestionsList = []; // Assuming this is populated elsewhere
-  TextEditingController _partnerController = TextEditingController();
-  List<String> allUsers = []; // Fetched from your backend
-  List<String> lastSelectedPartners =
-      []; // Fetched from SharedPreferences or similar
+  List<String> suggestionsList = [];
+  List<String> lastSelectedPartners = [];
   String? myUserName;
   bool _managerResolved = false;
-
-  bool isTodaySelected = true; // Default to "Today" being selected
-  bool isTomorrowSelected = false; // Initially, tomorrow is not selected
 
   // New variable for email notifications preference
   bool _receiveEmails = false;
@@ -49,8 +38,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final now = DateTime.now();
-    selectedDate = _effectiveToday(now); // instead of DateTime.now()
 
     // Always subscribe to auth changes
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) async {
@@ -94,19 +81,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() => _managerResolved = false);
       _refreshManagerFlag();
     }
-  }
-
-  DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
-  DateTime _addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
-
-  DateTime _effectiveToday(DateTime now) {
-    final base = _midnight(now);
-    return (now.hour >= 22) ? _addDays(base, 1) : base;
-  }
-
-  DateTime _effectiveTomorrow(DateTime now) {
-    final base = _midnight(now);
-    return (now.hour >= 22) ? _addDays(base, 2) : _addDays(base, 1);
   }
 
   @override
@@ -173,24 +147,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
         });
       }
     }
-  }
-
-  void updateSelectedDate(BuildContext context, DateTime newDate) {
-    DateTime today = DateTime.now();
-    DateTime normalizedToday = DateTime(today.year, today.month, today.day);
-    DateTime normalizedNewDate =
-        DateTime(newDate.year, newDate.month, newDate.day);
-
-    setState(() {
-      selectedDate = newDate;
-      if (normalizedNewDate.isAtSameMomentAs(normalizedToday)) {
-        isTodaySelected = true;
-        isTomorrowSelected = false;
-      } else {
-        isTodaySelected = false;
-        isTomorrowSelected = true;
-      }
-    });
   }
 
   void fetchAllUsers() async {
@@ -294,36 +250,6 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<String?> _showCustomMessageDialog(BuildContext context) async {
-    TextEditingController messageController = TextEditingController();
-    return await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('הכנס הודעה'),
-          content: TextField(
-            controller: messageController,
-            decoration: const InputDecoration(hintText: 'הודעה עבור ההזמנה'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('ביטול'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('אישור'),
-              onPressed: () {
-                Navigator.of(context).pop('!' + messageController.text);
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
@@ -334,237 +260,66 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
       return Scaffold(body: _buildLoginScreen());
     }
 
-    // 2) Logged in but manager flag not resolved yet → small spinner
+    // 2) Logged in but manager flag not resolved yet → branded loading
     if (!_managerResolved) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return Scaffold(body: _buildAuthLoadingScreen());
     }
 
     // 3) Logged in and resolved → normal UI
     return Scaffold(
-      body: _buildMainContent(),
       drawer: _buildDrawer(),
+      body: Builder(
+        builder: (scaffoldCtx) => BookingScreenV31(
+          isManager: isManager,
+          myUserName: myUserName,
+          lastFivePartners: lastSelectedPartners,
+          allUsers: suggestionsList,
+          darkMode: _darkMode,
+          onDarkModeToggle: _setDarkPreference,
+          onMenuTap: () => Scaffold.of(scaffoldCtx).openDrawer(),
+        ),
+      ),
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  Widget _buildMainContent() {
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        final now = DateTime.now();
-        final today = _effectiveToday(now);
-        final tomorrow = _effectiveTomorrow(now);
-
-        if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
-          // Swipe Right → go to tomorrow
-          if (_isSameDay(selectedDate ?? today, today)) {
-            updateSelectedDate(context, tomorrow);
-          }
-        } else if (details.primaryVelocity != null &&
-            details.primaryVelocity! < 0) {
-          // Swipe Left → go to today
-          if (_isSameDay(selectedDate ?? today, tomorrow)) {
-            updateSelectedDate(context, today);
-          }
-        }
-      },
-      child: Column(
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Builder(
-                  builder: (BuildContext context) {
-                    return IconButton(
-                      icon: const Icon(Icons.menu),
-                      onPressed: () {
-                        Scaffold.of(context).openDrawer();
-                      },
-                      color: isManager ? Colors.red : null,
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                if (isManager) ...[
-                  Flexible(
-                    flex: 1,
-                    child: DateSelector(
-                      onDateSelected: (DateTime date) {
-                        updateSelectedDate(context, date);
-                      },
-                    ),
-                  ),
-                ] else ...[
-                  Flexible(
-                    flex: 1,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final now = DateTime.now();
-                        final effectiveToday = _effectiveToday(now);
-                        final effectiveTomorrow = _effectiveTomorrow(now);
-
-                        final showing = (selectedDate ?? effectiveToday);
-                        final isShowingToday =
-                            _isSameDay(showing, effectiveToday);
-                        final target =
-                            isShowingToday ? effectiveTomorrow : effectiveToday;
-
-                        updateSelectedDate(context, target);
-                      },
-                      child: Builder(builder: (_) {
-                        final now = DateTime.now();
-                        final effectiveToday = _effectiveToday(now);
-                        final effectiveTomorrow = _effectiveTomorrow(now);
-
-                        final showing = (selectedDate ?? effectiveToday);
-                        final dayNumber = DateFormat('dd').format(showing);
-                        final bool after2200 = now.hour >= 22;
-                        final String todayWord = after2200 ? "מחר" : "היום";
-                        final String tomorrowWord =
-                            after2200 ? "מחרתיים" : "מחר";
-                        String label;
-                        if (_isSameDay(showing, effectiveToday)) {
-                          label = "$todayWord - $dayNumber";
-                        } else if (_isSameDay(showing, effectiveTomorrow)) {
-                          label = "$tomorrowWord - $dayNumber";
-                        } else {
-                          label = dayNumber; // fallback for other dates
-                        }
-                        return Text(label);
-                      }),
-                    ),
-                  ),
-                ],
-                const SizedBox(width: 8),
-                Flexible(
-                  flex: 1,
-                  child: Stack(
-                    alignment: Alignment.centerRight,
-                    children: [
-                      Autocomplete<String>(
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<String>.empty();
-                          }
-                          return suggestionsList.where((String option) {
-                            return option
-                                .toLowerCase()
-                                .contains(textEditingValue.text.toLowerCase());
-                          });
-                        },
-                        onSelected: (String selection) {
-                          setState(() {
-                            selectedPartner = selection;
-                            _partnerController.text = selection;
-                          });
-                        },
-                        fieldViewBuilder: (BuildContext context,
-                            TextEditingController fieldTextEditingController,
-                            FocusNode fieldFocusNode,
-                            VoidCallback onFieldSubmitted) {
-                          _partnerController = fieldTextEditingController;
-                          return TextField(
-                            controller: _partnerController,
-                            focusNode: fieldFocusNode,
-                            decoration: InputDecoration(
-                              hintText: "שותף",
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.arrow_drop_down),
-                                onPressed: () {
-                                  showMenu<String>(
-                                    context: context,
-                                    position:
-                                        RelativeRect.fromLTRB(0, 40, 0, 0),
-                                    items: lastSelectedPartners
-                                        .map((String partner) {
-                                      return PopupMenuItem<String>(
-                                        value: partner,
-                                        child: Text(partner),
-                                      );
-                                    }).toList(),
-                                  ).then((String? newValue) {
-                                    if (newValue != null) {
-                                      if (newValue == "הזמנת מנהל") {
-                                        _showCustomMessageDialog(context)
-                                            .then((customMessage) {
-                                          if (customMessage != null &&
-                                              customMessage.isNotEmpty) {
-                                            setState(() {
-                                              selectedPartner = customMessage;
-                                              _partnerController.text =
-                                                  customMessage;
-                                            });
-                                          }
-                                        });
-                                      } else {
-                                        setState(() {
-                                          selectedPartner = newValue;
-                                          _partnerController.text = newValue;
-                                        });
-                                      }
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                        optionsViewBuilder: (BuildContext context,
-                            AutocompleteOnSelected<String> onSelected,
-                            Iterable<String> options) {
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              child: Container(
-                                width: 300,
-                                height: 200,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.all(10.0),
-                                  itemCount: options.length,
-                                  itemBuilder:
-                                      (BuildContext context, int index) {
-                                    final String option =
-                                        options.elementAt(index);
-                                    return GestureDetector(
-                                      onTap: () {
-                                        onSelected(option);
-                                      },
-                                      child: ListTile(
-                                        title: Text(option),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+  Widget _buildAuthLoadingScreen() {
+    final tokens = BookingTokens.of(context);
+    return Container(
+      color: tokens.bg,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'מועדון הכרמל',
+              style: TextStyle(
+                color: tokens.clay,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Consumer<ApplicationState>(
-              builder: (context, appState, _) {
-                return CourtReservations(
-                  selectedDate: selectedDate ?? DateTime.now(),
-                  selectedPartner: selectedPartner ?? '',
-                  myUserName: myUserName,
-                );
-              },
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation(tokens.clay),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              'טוען…',
+              style: TextStyle(
+                color: tokens.ink2,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -573,18 +328,21 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
-            'Please log in to continue',
+            'התחבר.י כדי להמשיך',
             style: TextStyle(fontSize: 20),
           ),
           const SizedBox(height: 20),
-          AuthFunc(
-            loggedIn: false,
-            signOut: () async {
-              await FirebaseAuth.instance.signOut();
-              setState(() {});
-            },
+          Center(
+            child: AuthFunc(
+              loggedIn: false,
+              signOut: () async {
+                await FirebaseAuth.instance.signOut();
+                setState(() {});
+              },
+            ),
           ),
         ],
       ),
@@ -592,13 +350,14 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleDarkPreference(bool newValue) async {
-    // 1) Capture navigator now (no context later)
+    // Drawer entry point: close drawer first, then persist.
     final navigator = Navigator.of(context);
-
-    // 2) Close the drawer immediately (prevents rebuild while open)
     if (navigator.canPop()) navigator.pop();
+    await _setDarkPreference(newValue);
+  }
 
-    // 3) Persist to Firestore
+  Future<void> _setDarkPreference(bool newValue) async {
+    // Persist to Firestore + flip theme. Safe to call from anywhere.
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -610,12 +369,9 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
       await users.doc(q.docs.first.id).update({'darkMode': newValue});
     }
 
-    // 4) Widget may have been disposed while awaiting
     if (!mounted) return;
-
     setState(() => _darkMode = newValue);
 
-    // 5) Flip theme on next frame (no context used)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ThemeController.instance.setDark(newValue);
     });

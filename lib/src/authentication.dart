@@ -24,9 +24,11 @@ class AuthFunc extends StatelessWidget {
     final String? userName = FirebaseAuth.instance.currentUser?.displayName;
     final String user1 = userName ?? '';
     return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 24, bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: StyledButton(
               onPressed: () {
                 !loggedIn ? context.push('/sign-in') : signOut();
@@ -36,12 +38,13 @@ class AuthFunc extends StatelessWidget {
         Visibility(
           visible: loggedIn,
           child: Padding(
-            padding: const EdgeInsets.only(left: 24, bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: StyledButton(
               onPressed: () {
                 context.push('/profile');
               },
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('שלום $user1'),
                 ],
