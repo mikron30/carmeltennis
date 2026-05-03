@@ -1,0 +1,37 @@
+name: Deploy preview to Firebase Hosting (PR)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build_and_preview:
+    # Skip PRs from forks — they don't get access to repo secrets, and the
+    # action would fail on the firebaseServiceAccount line anyway.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter build web --release
+
+      - name: Sync build/web to public/
+        run: |
+          rm -rf public
+          mkdir public
+          cp -r build/web/. public/
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: mit-app-inventor-bff1c
+          # No channelId → the action creates an ephemeral preview channel
+          # named after the PR and posts the URL back as a PR comment.

@@ -17,7 +17,7 @@ flutter test                         # run all tests
 flutter test test/widget_test.dart   # run a single test file
 flutter build web                    # build web bundle into build/web
 flutter build apk                    # Android release APK (signed via carmeltennis.jks; see android/)
-firebase deploy --only hosting       # deploy `public/` (note: hosting serves public/, NOT build/web — see "Deployment" below)
+firebase deploy --only hosting       # manual deploy fallback; CI handles this on push to main (see "Deployment" below)
 ```
 
 The Python scripts at the repo root (`add_users_to_database_*.py`, `delete_all_reservations.py`, `import_users_from_excel.py`, `remove_duplicates.py`) are **one-off admin utilities** that talk to Firestore via `firebase_admin`. They are not part of the Flutter build. Do not assume they reflect current schema unless verified against `lib/`.
@@ -57,7 +57,12 @@ The Python scripts at the repo root (`add_users_to_database_*.py`, `delete_all_r
 
 ## Deployment notes
 
-- `firebase.json` hosting block serves the **`public/`** folder (currently a placeholder `index.html`), **not** `build/web`. Before deploying the Flutter web app, either copy `build/web/*` into `public/` or change `hosting.public` in `firebase.json`. Don't assume `firebase deploy --only hosting` ships the latest Flutter web build as-is.
+- **Web hosting is automated.** Two GitHub Actions workflows under `.github/workflows/` handle deploys for project `mit-app-inventor-bff1c`:
+  - `deploy-live.yml` — runs on push to `main`, builds the web bundle, syncs into `public/`, and deploys to the live channel.
+  - `deploy-preview.yml` — runs on PRs to `main` (from same-repo branches only), deploys to a per-PR preview channel and posts the URL as a PR comment.
+  - Both authenticate via the `FIREBASE_SERVICE_ACCOUNT` repo secret (a service-account JSON with the **Firebase Hosting Admin** role on project `mit-app-inventor-bff1c`).
+- `firebase.json` hosting block serves the **`public/`** folder. `public/` is gitignored — CI populates it from `build/web/` at deploy time. For a manual deploy, run `flutter build web && rm -rf public && mkdir public && cp -r build/web/. public/ && firebase deploy --only hosting`.
+- `build/` is also gitignored. Flutter rebuilds it locally / in CI as needed.
 - Android signing uses `carmeltennis.jks` at the repo root (referenced from `android/`).
 - `bfg.jar` at repo root is the BFG repo-cleaner tool kept around for git history scrubs; it is not part of the build.
 
