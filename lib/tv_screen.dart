@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'court_reservation.dart';
+import 'israel_time.dart';
 
 class TvScreen extends StatefulWidget {
   const TvScreen({super.key});
@@ -28,7 +29,7 @@ class _TvScreenState extends State<TvScreen> {
   }
 
   void _computeEffectiveDates() {
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     final base = DateTime(now.year, now.month, now.day);
     final after2200 = now.hour >= 22;
     final today = after2200 ? base.add(const Duration(days: 1)) : base;
@@ -43,8 +44,8 @@ class _TvScreenState extends State<TvScreen> {
 
   void _scheduleMidnightRoll() {
     _midnightTimer?.cancel();
-    final now = DateTime.now();
-    // Roll at 22:00 to the next logical day, matching app logic
+    final now = IsraelTime.now();
+    // Roll at 22:00 Israel local time to the next logical day, matching app logic
     DateTime nextRoll = DateTime(now.year, now.month, now.day, 22);
     if (now.isAfter(nextRoll)) {
       nextRoll = nextRoll.add(const Duration(days: 1));

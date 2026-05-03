@@ -25,6 +25,7 @@ class HeroStrip extends StatelessWidget {
   final int? tomorrowTemp;
   final ValueChanged<HeroDay> onDayChanged;
   final VoidCallback? onMenuTap;
+  final bool afterRollover;
 
   const HeroStrip({
     super.key,
@@ -35,13 +36,17 @@ class HeroStrip extends StatelessWidget {
     required this.tomorrowTemp,
     required this.onDayChanged,
     this.onMenuTap,
+    this.afterRollover = false,
   });
+
+  String get _todayLabel => afterRollover ? 'מחר' : 'היום';
+  String get _tomorrowLabel => afterRollover ? 'מחרתיים' : 'מחר';
 
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
     final hasNext = nextUp != null;
-    final dayLabel = day == HeroDay.today ? 'היום' : 'מחר';
+    final dayLabel = day == HeroDay.today ? _todayLabel : _tomorrowLabel;
     final dateStr = DateFormat('d.M').format(date);
 
     return AnimatedContainer(
@@ -100,8 +105,8 @@ class HeroStrip extends StatelessWidget {
         Text(
           dateStr,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.78),
-            fontSize: 11,
+            color: Colors.white.withOpacity(afterRollover ? 1.0 : 0.78),
+            fontSize: afterRollover ? 13 : 11,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.44,
           ),
@@ -176,6 +181,8 @@ class HeroStrip extends StatelessWidget {
         const SizedBox(width: 10),
         _DayToggle(
           day: day,
+          todayLabel: _todayLabel,
+          tomorrowLabel: _tomorrowLabel,
           todayTemp: todayTemp,
           tomorrowTemp: tomorrowTemp,
           onChanged: onDayChanged,
@@ -208,8 +215,8 @@ class HeroStrip extends StatelessWidget {
               Text(
                 dateStr,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.78),
-                  fontSize: 11,
+                  color: Colors.white.withOpacity(afterRollover ? 1.0 : 0.78),
+                  fontSize: afterRollover ? 13 : 11,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.44,
                 ),
@@ -232,6 +239,8 @@ class HeroStrip extends StatelessWidget {
         const SizedBox(width: 10),
         _DayToggle(
           day: day,
+          todayLabel: _todayLabel,
+          tomorrowLabel: _tomorrowLabel,
           todayTemp: todayTemp,
           tomorrowTemp: tomorrowTemp,
           onChanged: onDayChanged,
@@ -264,6 +273,8 @@ class HeroStrip extends StatelessWidget {
 
 class _DayToggle extends StatelessWidget {
   final HeroDay day;
+  final String todayLabel;
+  final String tomorrowLabel;
   final int? todayTemp;
   final int? tomorrowTemp;
   final ValueChanged<HeroDay> onChanged;
@@ -271,6 +282,8 @@ class _DayToggle extends StatelessWidget {
 
   const _DayToggle({
     required this.day,
+    required this.todayLabel,
+    required this.tomorrowLabel,
     required this.todayTemp,
     required this.tomorrowTemp,
     required this.onChanged,
@@ -289,14 +302,14 @@ class _DayToggle extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _segment(
-            label: 'היום',
+            label: todayLabel,
             temp: todayTemp,
             active: day == HeroDay.today,
             onTap: () => onChanged(HeroDay.today),
           ),
           const SizedBox(width: 1),
           _segment(
-            label: 'מחר',
+            label: tomorrowLabel,
             temp: tomorrowTemp,
             active: day == HeroDay.tomorrow,
             onTap: () => onChanged(HeroDay.tomorrow),

@@ -14,6 +14,7 @@ import 'theme_controller.dart';
 import 'dart:async';
 import 'tv_screen.dart';
 import 'tv_message_editor.dart';
+import 'widgets/bouncing_ball_loader.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -299,16 +300,9 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
                 letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation(tokens.clay),
-              ),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 18),
+            const BouncingBallLoader(size: 36, showBaseline: true),
+            const SizedBox(height: 8),
             Text(
               'טוען…',
               style: TextStyle(

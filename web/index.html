@@ -42,6 +42,11 @@
 <body>
   <script>
     window.addEventListener('load', function(ev) {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(function(e) {
+          console.warn('SW registration failed', e);
+        });
+      }
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
         serviceWorker: {

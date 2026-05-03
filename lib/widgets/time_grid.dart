@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../booking_tokens.dart';
+import 'bouncing_ball_loader.dart';
 import 'slot_button.dart';
 
 typedef SlotBuilder = SlotData Function(int courtUiIndex, int hour);
@@ -61,12 +62,13 @@ class TimeGrid extends StatelessWidget {
         children: [
           _CourtHeader(numberOfCourts: numberOfCourts, tokens: tokens),
           SizedBox(
-            height: 2,
+            height: loading ? 22 : 2,
             child: loading
-                ? LinearProgressIndicator(
-                    minHeight: 2,
-                    backgroundColor: tokens.line,
-                    valueColor: AlwaysStoppedAnimation(tokens.clay),
+                ? const Center(
+                    child: BouncingBallLoader(
+                      size: 14,
+                      showBaseline: false,
+                    ),
                   )
                 : null,
           ),
