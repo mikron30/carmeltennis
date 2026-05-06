@@ -6,6 +6,7 @@ import 'reservation_manager.dart';
 import 'package:intl/intl.dart';
 import 'email_service.dart';
 import 'user_manager.dart';
+import 'booking_limits.dart';
 
 class CourtReservations extends StatefulWidget {
   final DateTime selectedDate; // Selected date passed from DateSelector
@@ -228,57 +229,16 @@ class CourtReservationsState extends State<CourtReservations> {
     }
   }
 
-  // Add this function to count the weekly reservations between specific hours
-  Future<int> _countReservation(String userName, DateTime selectedDate,
-      int startHour, int endHour) async {
-    // Define the start and end of the week (Sunday to Thursday)
-    DateTime startOfWeek = selectedDate.subtract(
-      Duration(days: (selectedDate.weekday % 7)),
-    );
-    DateTime endOfWeek = startOfWeek.add(Duration(days: 6)); // End on Thursday
-
-    String startOfWeekFormatted = DateFormat('yyyy-MM-dd').format(startOfWeek);
-    String endOfWeekFormatted = DateFormat('yyyy-MM-dd').format(endOfWeek);
-
+  Future<int> _countWeeklyEveningReservations(
+    String userName,
+    DateTime selectedDate,
+  ) async {
     try {
-      // Query for reservations where userName equals userName
-      final userNameQuery = FirebaseFirestore.instance
-          .collection('reservations')
-          .where('userName', isEqualTo: userName);
-      final QuerySnapshot userNameSnapshot = await userNameQuery.get();
-
-      // Filter each result set for the date range and specific hours
-      int userNameCount = userNameSnapshot.docs.where((doc) {
-        String date = doc['date'];
-        int hour = doc['hour'];
-        bool withinDateRange = date.compareTo(startOfWeekFormatted) >= 0 &&
-            date.compareTo(endOfWeekFormatted) <= 0;
-        bool withinHours = hour >= startHour && hour <= endHour;
-        return withinDateRange && withinHours;
-      }).length;
-
-      final partnerNameQuery = FirebaseFirestore.instance
-          .collection('reservations')
-          .where('partner', isEqualTo: userName);
-      final QuerySnapshot partnerNameSnapshot = await partnerNameQuery.get();
-
-      // Filter each result set for the date range and specific hours
-      int partnerNameCount = partnerNameSnapshot.docs.where((doc) {
-        String date = doc['date'];
-        int hour = doc['hour'];
-        bool withinDateRange = date.compareTo(startOfWeekFormatted) >= 0 &&
-            date.compareTo(endOfWeekFormatted) <= 0;
-        bool withinHours = hour >= startHour && hour <= endHour;
-        return withinDateRange && withinHours;
-      }).length;
-
-      int total = partnerNameCount + userNameCount;
-      // Return the total count
-      return total;
+      return await ReservationManager()
+          .countWeeklyEveningReservations(userName, selectedDate);
     } catch (e) {
-      // Handle any errors
       print("Error in counting weekly reservations between hours: $e");
-      return 0; // Return a default value in case of error
+      return 0;
     }
   }
 
@@ -481,23 +441,22 @@ class CourtReservationsState extends State<CourtReservations> {
             }
           }
         } else {
-          if (isManager || widget.selectedPartner != '') {
+          final selectedPartnerName = widget.selectedPartner?.trim() ?? '';
+          if (selectedPartnerName.isNotEmpty) {
             ReservationManager reservationManager = ReservationManager();
 
             // Check if the user or the partner already has a reservation on the given date
             bool userHasReservation = await reservationManager
                 .hasExistingReservation(widget.myUserName ?? '', selectedDate);
-            bool partnerHasReservation =
-                await reservationManager.hasExistingReservation(
-                    widget.selectedPartner ?? '', selectedDate);
+            bool partnerHasReservation = await reservationManager
+                .hasExistingReservation(selectedPartnerName, selectedDate);
 
             if (!isManager && (userHasReservation || partnerHasReservation)) {
               if (!mounted) {
                 return; // Add this check before showDialog or using context after async gap
               }
-              String? name = userHasReservation
-                  ? widget.myUserName
-                  : widget.selectedPartner;
+              String? name =
+                  userHasReservation ? widget.myUserName : selectedPartnerName;
               // Show popup if the user already has a reservation
               showDialog(
                 context: context,
@@ -536,15 +495,14 @@ class CourtReservationsState extends State<CourtReservations> {
                   },
                 );
               } else {
-                bool canReserveMe = await _countReservation(
-                        widget.myUserName ?? '', selectedDate, 18, 20) <
-                    3;
-                bool canReservepartner = await _countReservation(
-                        widget.selectedPartner ?? '', selectedDate, 18, 20) <
-                    3;
+                bool canReserveMe = await _countWeeklyEveningReservations(
+                        widget.myUserName ?? '', selectedDate) <
+                    kWeeklyEveningQuota;
+                bool canReservepartner = await _countWeeklyEveningReservations(
+                        selectedPartnerName, selectedDate) <
+                    kWeeklyEveningQuota;
                 if (!isManager &&
-                    hour >= 18 &&
-                    hour <= 20 &&
+                    isEveningQuotaHour(hour) &&
                     (!canReserveMe || !canReservepartner)) {
                   // Show an error message if the user exceeded the weekly limit
                   showDialog(
@@ -554,9 +512,9 @@ class CourtReservationsState extends State<CourtReservations> {
                         title: const Text('שגיאה'),
                         content: canReservepartner
                             ? const Text(
-                                ' הגעת למכסת ההזמנות השבועיות בשעות הערב 6 עד 9')
+                                ' הגעת למכסת ההזמנות השבועיות בשעות 18:00, 19:00 ו-20:00')
                             : const Text(
-                                ' השותפ.ה הגיע.ה למכסת ההזמנות השבועיות בשעות הערב 6 עד 9'),
+                                ' השותפ.ה הגיע.ה למכסת ההזמנות השבועיות בשעות 18:00, 19:00 ו-20:00'),
                         actions: <Widget>[
                           TextButton(
                             child: const Text('אישור'),
@@ -578,7 +536,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   'hour': hour,
                   'isReserved': true,
                   'userName': widget.myUserName!.trim(),
-                  'partner': widget.selectedPartner!.trim(),
+                  'partner': selectedPartnerName,
                 };
                 // Optimistically update UI before the network round-trip.
                 final previousCell = Map<String, dynamic>.from(
@@ -589,7 +547,7 @@ class CourtReservationsState extends State<CourtReservations> {
                   courtsReservations[courtNumber - 1][hour] = {
                     'isReserved': true,
                     'userName': widget.myUserName!.trim(),
-                    'partner': widget.selectedPartner!.trim(),
+                    'partner': selectedPartnerName,
                   };
                 });
                 final reservationId = DateTime.now().toUtc().toIso8601String();
@@ -610,14 +568,13 @@ class CourtReservationsState extends State<CourtReservations> {
                 }
 
                 // Update the last 5 partners after the reservation is saved
-                await updateLastFivePartners(
-                    user.email!, widget.selectedPartner!.trim());
+                await updateLastFivePartners(user.email!, selectedPartnerName);
 
                 int displayCourtNumber = dbCourtNumber;
 
                 final originatorEmail = user.email!;
                 final originatorName = widget.myUserName ?? '';
-                final partnerName = widget.selectedPartner?.trim() ?? '';
+                final partnerName = selectedPartnerName;
                 final partnerEmail =
                     await UserManager.instance.getEmailByUsername(partnerName);
 
@@ -926,9 +883,7 @@ class CourtReservationsState extends State<CourtReservations> {
       );
     } else {
       final String label = isReserved
-          ? (isTv
-              ? displayMessage
-              : displayMessage)
+          ? (isTv ? displayMessage : displayMessage)
           : (isTv ? "פנוי" : (isPast ? "סגור" : "פנוי"));
 
       final Color bgColor = isReserved

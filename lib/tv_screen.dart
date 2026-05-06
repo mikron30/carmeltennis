@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'court_reservation.dart';
+import 'package:intl/intl.dart' as intl;
+
+import 'booking_tokens.dart';
+import 'holiday_courts.dart';
 import 'israel_time.dart';
+import 'widgets/slot_button.dart';
+import 'widgets/time_grid.dart';
 
 class TvScreen extends StatefulWidget {
   const TvScreen({super.key});
@@ -16,185 +22,405 @@ class TvScreen extends StatefulWidget {
 class _TvScreenState extends State<TvScreen> {
   late DateTime _effectiveToday;
   late DateTime _effectiveTomorrow;
-  Timer? _midnightTimer;
+  Timer? _rollTimer;
   Timer? _refreshTimer;
   int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
-    _computeEffectiveDates();
-    _scheduleMidnightRoll();
+    _setEffectiveDates();
+    _scheduleRoll();
     _scheduleHourlyRefresh();
   }
 
-  void _computeEffectiveDates() {
-    final now = IsraelTime.now();
-    final base = DateTime(now.year, now.month, now.day);
-    final after2200 = now.hour >= 22;
-    final today = after2200 ? base.add(const Duration(days: 1)) : base;
-    final tomorrow = after2200
-        ? base.add(const Duration(days: 2))
-        : base.add(const Duration(days: 1));
-    setState(() {
-      _effectiveToday = today;
-      _effectiveTomorrow = tomorrow;
-    });
+  @override
+  void dispose() {
+    _rollTimer?.cancel();
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
-  void _scheduleMidnightRoll() {
-    _midnightTimer?.cancel();
+  void _setEffectiveDates() {
     final now = IsraelTime.now();
-    // Roll at 22:00 Israel local time to the next logical day, matching app logic
-    DateTime nextRoll = DateTime(now.year, now.month, now.day, 22);
-    if (now.isAfter(nextRoll)) {
+    final base = DateTime(now.year, now.month, now.day);
+    final afterTen = now.hour >= 22;
+    _effectiveToday = afterTen ? base.add(const Duration(days: 1)) : base;
+    _effectiveTomorrow = afterTen
+        ? base.add(const Duration(days: 2))
+        : base.add(const Duration(days: 1));
+  }
+
+  void _scheduleRoll() {
+    _rollTimer?.cancel();
+    final now = IsraelTime.now();
+    var nextRoll = DateTime(now.year, now.month, now.day, 22);
+    if (!nextRoll.isAfter(now)) {
       nextRoll = nextRoll.add(const Duration(days: 1));
     }
-    final duration = nextRoll.difference(now);
-    _midnightTimer = Timer(duration, () {
-      _computeEffectiveDates();
-      _scheduleMidnightRoll();
+    _rollTimer = Timer(nextRoll.difference(now), () {
+      setState(() {
+        _setEffectiveDates();
+        _refreshKey++;
+      });
+      _scheduleRoll();
     });
   }
 
   void _scheduleHourlyRefresh() {
     _refreshTimer?.cancel();
     final now = DateTime.now();
-    // Schedule refresh at the top of the next hour
-    DateTime nextHour =
-        DateTime(now.year, now.month, now.day, now.hour + 1, 0, 0);
-    final duration = nextHour.difference(now);
-    _refreshTimer = Timer(duration, () {
-      setState(() {
-        _refreshKey++;
-      });
+    final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1);
+    _refreshTimer = Timer(nextHour.difference(now), () {
+      setState(() => _refreshKey++);
       _scheduleHourlyRefresh();
     });
   }
 
   @override
-  void dispose() {
-    _midnightTimer?.cancel();
-    _refreshTimer?.cancel();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: BookingTokens.dark.bg,
+        extensions: const [BookingTokens.dark],
+      ),
+      child: Builder(
+        builder: (context) {
+          final tokens = BookingTokens.of(context);
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              backgroundColor: tokens.bg,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _TvHeader(refreshKey: _refreshKey),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _TvDayBoard(
+                                key: ValueKey('today_$_refreshKey'),
+                                date: _effectiveToday,
+                                label: 'היום',
+                                refreshKey: _refreshKey,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _TvDayBoard(
+                                key: ValueKey('tomorrow_$_refreshKey'),
+                                date: _effectiveTomorrow,
+                                label: 'מחר',
+                                refreshKey: _refreshKey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const _TvMarquee(),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TvHeader extends StatelessWidget {
+  final int refreshKey;
+  const _TvHeader({required this.refreshKey});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = BookingTokens.of(context);
+    final now = DateTime.now();
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [tokens.clay, tokens.clayD],
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text(
+            'מועדון הכרמל',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text(
+            'לוח מגרשים',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.76),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            time,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TvDayBoard extends StatefulWidget {
+  final DateTime date;
+  final String label;
+  final int refreshKey;
+
+  const _TvDayBoard({
+    super.key,
+    required this.date,
+    required this.label,
+    required this.refreshKey,
+  });
+
+  @override
+  State<_TvDayBoard> createState() => _TvDayBoardState();
+}
+
+class _TvDayBoardState extends State<_TvDayBoard> {
+  String _holidayType = 'רגיל';
+  int _numberOfCourts = 2;
+  bool _loadingCourts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCourtState();
   }
 
-  String _formatDateHebrew(DateTime d) {
-    // Basic Hebrew-like formatting without intl locale dependency changes
-    // Dart weekday: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday, 7=Sunday
-    const weekdays = [
-      '', // index 0 - not used
-      'יום שני', // 1
-      'יום שלישי', // 2
-      'יום רביעי', // 3
-      'יום חמישי', // 4
-      'יום שישי', // 5
-      'יום שבת', // 6
-      'יום ראשון', // 7
-    ];
-    final weekday = weekdays[d.weekday];
-    return '$weekday ${d.day}.${d.month}.${d.year}';
+  @override
+  void didUpdateWidget(covariant _TvDayBoard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isSameDay(widget.date, oldWidget.date) ||
+        widget.refreshKey != oldWidget.refreshKey) {
+      _loadCourtState();
+    }
+  }
+
+  String get _dateKey => intl.DateFormat('yyyy-MM-dd').format(widget.date);
+
+  Future<void> _loadCourtState() async {
+    setState(() => _loadingCourts = true);
+    final type = await getHolidayType(widget.date);
+    final courts = numberOfCourtsFor(widget.date, type);
+    if (!mounted) return;
+    setState(() {
+      _holidayType = type;
+      _numberOfCourts = courts;
+      _loadingCourts = false;
+    });
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  int? _nowHourFor(DateTime date) {
+    final now = DateTime.now();
+    return _isSameDay(date, now) ? now.hour : null;
+  }
+
+  SlotData _slotFor(
+    Map<int, Map<int, _TvReservation>> reservations,
+    int courtUiIndex,
+    int hour,
+  ) {
+    if (isCoachSlot(
+      date: widget.date,
+      hour: hour,
+      courtUiIndex: courtUiIndex,
+      holidayType: _holidayType,
+    )) {
+      return const SlotData(state: SlotState.coach, primaryLabel: 'מאמן');
+    }
+
+    final dbCourtNumber = _numberOfCourts - courtUiIndex;
+    final reservation = reservations[dbCourtNumber]?[hour];
+    if (reservation == null) {
+      return const SlotData(state: SlotState.free, primaryLabel: 'פנוי');
+    }
+
+    final customLabel = _customBookingLabel(reservation.partner);
+    if (customLabel != null) {
+      return SlotData(state: SlotState.taken, primaryLabel: customLabel);
+    }
+
+    return SlotData(
+      state: SlotState.taken,
+      primaryLabel:
+          '${_displayName(reservation.userName)}\n${_displayName(reservation.partner)}',
+    );
+  }
+
+  String _displayName(String raw) {
+    if (raw.startsWith('!')) return raw.substring(1).trim();
+    return raw.trim();
+  }
+
+  String? _customBookingLabel(String raw) {
+    if (!raw.startsWith('!')) return null;
+    final label = raw.substring(1).trim();
+    return label.isEmpty ? 'הזמנת מנהל' : label;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            _formatDateHebrew(_effectiveToday),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: Theme(
-                              data: Theme.of(context).copyWith(
-                                textTheme: Theme.of(context).textTheme.apply(
-                                      bodyColor: Colors.white,
-                                      displayColor: Colors.white,
-                                    ),
-                              ),
-                              child: Directionality(
-                                textDirection: TextDirection.rtl,
-                                child: CourtReservations(
-                                  key: ValueKey('today_$_refreshKey'),
-                                  selectedDate: _effectiveToday,
-                                  selectedPartner: '',
-                                  myUserName: null,
-                                  useFullNames: true,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Container(width: 2, color: Colors.white24),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            _formatDateHebrew(_effectiveTomorrow),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: Theme(
-                              data: Theme.of(context).copyWith(
-                                textTheme: Theme.of(context).textTheme.apply(
-                                      bodyColor: Colors.white,
-                                      displayColor: Colors.white,
-                                    ),
-                              ),
-                              child: Directionality(
-                                textDirection: TextDirection.rtl,
-                                child: CourtReservations(
-                                  key: ValueKey('tomorrow_$_refreshKey'),
-                                  selectedDate: _effectiveTomorrow,
-                                  selectedPartner: '',
-                                  myUserName: null,
-                                  useFullNames: true,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            const _TvMarquee(),
-          ],
-        ),
+    final tokens = BookingTokens.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border.all(color: tokens.line, width: 1),
+        borderRadius: BorderRadius.circular(8),
       ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _TvBoardHeader(date: widget.date, label: widget.label),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('reservations')
+                  .where('date', isEqualTo: _dateKey)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final reservations = <int, Map<int, _TvReservation>>{};
+                for (final doc in snapshot.data?.docs ??
+                    const <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
+                  final reservation = _TvReservation.fromDoc(doc);
+                  (reservations[reservation.courtNumber] ??=
+                      {})[reservation.hour] = reservation;
+                }
+
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: const TextScaler.linear(1.12),
+                  ),
+                  child: TimeGrid(
+                    numberOfCourts: _numberOfCourts,
+                    nowHour: _nowHourFor(widget.date),
+                    loading: _loadingCourts ||
+                        snapshot.connectionState == ConnectionState.waiting,
+                    slotBuilder: (courtUiIndex, hour) =>
+                        _slotFor(reservations, courtUiIndex, hour),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TvBoardHeader extends StatelessWidget {
+  final DateTime date;
+  final String label;
+
+  const _TvBoardHeader({
+    required this.date,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = BookingTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 9),
+      decoration: BoxDecoration(
+        color: tokens.bg,
+        border: Border(bottom: BorderSide(color: tokens.line, width: 1)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: tokens.clayInk,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _formatDateHebrew(date),
+            style: TextStyle(
+              color: tokens.ink2,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateHebrew(DateTime d) {
+    const weekdays = [
+      '',
+      'יום שני',
+      'יום שלישי',
+      'יום רביעי',
+      'יום חמישי',
+      'יום שישי',
+      'שבת',
+      'יום ראשון',
+    ];
+    return '${weekdays[d.weekday]} ${d.day}.${d.month}.${d.year}';
+  }
+}
+
+class _TvReservation {
+  final int courtNumber;
+  final int hour;
+  final String userName;
+  final String partner;
+
+  const _TvReservation({
+    required this.courtNumber,
+    required this.hour,
+    required this.userName,
+    required this.partner,
+  });
+
+  factory _TvReservation.fromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    return _TvReservation(
+      courtNumber: (data['courtNumber'] ?? 0) as int,
+      hour: (data['hour'] ?? 0) as int,
+      userName: (data['userName'] ?? '') as String,
+      partner: (data['partner'] ?? '') as String,
     );
   }
 }
@@ -207,7 +433,6 @@ class _TvMarquee extends StatefulWidget {
 }
 
 class _TvMarqueeState extends State<_TvMarquee> {
-  String _text = '';
   String? _heatText;
   Timer? _heatTimer;
   final Dio _dio = Dio();
@@ -252,10 +477,7 @@ class _TvMarqueeState extends State<_TvMarquee> {
       final windSpeed = (current['wind_speed_10m'] as num?)?.toDouble();
       final windDir = (current['wind_direction_10m'] as num?)?.toDouble();
       final currentTime = current['time'] as String?;
-      final nextHourProb = _nextHourPrecipProbability(
-        data,
-        currentTime,
-      );
+      final nextHourProb = _nextHourPrecipProbability(data, currentTime);
       if (tempC == null ||
           rh == null ||
           windSpeed == null ||
@@ -266,12 +488,8 @@ class _TvMarqueeState extends State<_TvMarquee> {
       }
       final hiC = _computeHeatIndexC(tempC, rh);
       final label = _heatLevelLabel(hiC);
-      final hiRounded = hiC.round();
-      final windDirText = _windDirectionHebrew(windDir);
-      final windRounded = windSpeed.round();
-      final rainProbRounded = nextHourProb.round();
       _setHeatText(
-        'עומס חום: ${hiRounded}° – $label | סיכוי לגשם בשעה הקרובה: ${rainProbRounded}% | רוח: ${windRounded} קמ״ש $windDirText',
+        'עומס חום: ${hiC.round()}° - $label   |   סיכוי לגשם בשעה הקרובה: ${nextHourProb.round()}%   |   רוח: ${windSpeed.round()} קמ״ש ${_windDirectionHebrew(windDir)}',
       );
     } catch (_) {
       _setHeatText(null);
@@ -287,20 +505,18 @@ class _TvMarqueeState extends State<_TvMarquee> {
 
   double _computeHeatIndexC(double tempC, double rh) {
     final tempF = tempC * 9 / 5 + 32;
-    if (tempF < 80) {
-      return tempC;
-    }
+    if (tempF < 80) return tempC;
     final t = tempF;
     final r = rh;
     double hi = -42.379 +
         2.04901523 * t +
-        10.14333127 * r +
-        -0.22475541 * t * r +
-        -0.00683783 * t * t +
-        -0.05481717 * r * r +
+        10.14333127 * r -
+        0.22475541 * t * r -
+        0.00683783 * t * t -
+        0.05481717 * r * r +
         0.00122874 * t * t * r +
-        0.00085282 * t * r * r +
-        -0.00000199 * t * t * r * r;
+        0.00085282 * t * r * r -
+        0.00000199 * t * t * r * r;
     if (r < 13 && t >= 80 && t <= 112) {
       final adj = ((13 - r) / 4) * sqrt((17 - (t - 95).abs()) / 17);
       hi -= adj;
@@ -356,45 +572,52 @@ class _TvMarqueeState extends State<_TvMarquee> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = BookingTokens.of(context);
     return Container(
-      height: _heatText == null ? 120 : 160,
-      color: Colors.white10,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 9, 18, 12),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(top: BorderSide(color: tokens.line, width: 1)),
+      ),
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('tv')
             .doc('marquee')
             .snapshots(),
         builder: (context, snap) {
-          _text = (snap.data?.data()?['text'] as String?) ?? '';
+          final text = (snap.data?.data()?['text'] as String?)?.trim();
           final display =
-              _text.trim().isEmpty ? 'ברוכים הבאים למועדון כרמל' : _text.trim();
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_heatText != null)
-                    Text(
-                      _heatText!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 40,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  Text(
-                    display,
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontSize: 80,
-                      fontWeight: FontWeight.w600,
-                    ),
+              text == null || text.isEmpty ? 'ברוכים הבאים למועדון כרמל' : text;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_heatText != null) ...[
+                Text(
+                  _heatText!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: tokens.ink2,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
                   ),
-                ],
+                ),
+                const SizedBox(height: 6),
+              ],
+              Text(
+                display,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: tokens.clayInk,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w900,
+                  height: 1.05,
+                ),
               ),
-            ),
+            ],
           );
         },
       ),

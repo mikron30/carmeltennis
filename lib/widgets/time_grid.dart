@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../booking_tokens.dart';
 import 'bouncing_ball_loader.dart';
+import '../booking_limits.dart';
 import 'slot_button.dart';
 
 typedef SlotBuilder = SlotData Function(int courtUiIndex, int hour);
@@ -19,11 +20,25 @@ class SlotData {
   });
 }
 
-const Set<int> kEveningHours = {18, 19, 20};
+const Set<int> kEveningHours = kEveningQuotaHours;
 const Set<int> kBusyHours = kEveningHours;
 
 const List<int> kHours = [
-  7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
 ];
 
 class TimeGrid extends StatelessWidget {
@@ -226,12 +241,14 @@ class _NowDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = TimeOfDay.now();
-    final label = '— עכשיו ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} —';
+    final label =
+        '— עכשיו ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} —';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(child: Container(height: 2, color: tokens.clay.withOpacity(0.5))),
+          Expanded(
+              child: Container(height: 2, color: tokens.clay.withOpacity(0.5))),
           const SizedBox(width: 8),
           Text(
             label,
@@ -243,7 +260,8 @@ class _NowDivider extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(child: Container(height: 2, color: tokens.clay.withOpacity(0.5))),
+          Expanded(
+              child: Container(height: 2, color: tokens.clay.withOpacity(0.5))),
         ],
       ),
     );
