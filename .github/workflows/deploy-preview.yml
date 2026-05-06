@@ -32,6 +32,6 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_POTENT_HOWL_228108 }}
-          projectId: mit-app-inventor-bff1c
+          projectId: potent-howl-228108
           # No channelId → the action creates an ephemeral preview channel
           # named after the PR and posts the URL back as a PR comment.
