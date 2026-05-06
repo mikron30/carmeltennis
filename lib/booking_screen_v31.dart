@@ -312,6 +312,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
         return SlotData(
           state: state,
           primaryLabel: _shortName(_displayPartner(partner)),
+          secondaryLabel: _shortName(widget.myUserName!),
           onTap: () => _handleTap(courtUiIndex, hour),
         );
       }

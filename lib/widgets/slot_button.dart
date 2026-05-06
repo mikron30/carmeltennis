@@ -219,7 +219,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
     final secondary = widget.secondaryLabel;
 
     final mineBadge = widget.state == SlotState.mine
-        ? '·שלי'
+        ? '·${secondary ?? 'שלי'}'
         : (widget.state == SlotState.mineLocked ? '·נעול' : null);
 
     if (widget.state == SlotState.preview) {
