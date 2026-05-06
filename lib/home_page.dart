@@ -305,6 +305,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             Text(
               'טוען…',
+              textDirection: TextDirection.rtl,
               style: TextStyle(
                 color: tokens.ink2,
                 fontSize: 11,
