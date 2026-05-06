@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'public/**'
+      - 'build/web/**'
 
 concurrency:
   group: hosting-live
@@ -30,13 +30,10 @@ jobs:
 
       - run: flutter build web --release
 
-      - name: Commit public/ to repo
+      - name: Commit build/web to repo
         run: |
-          rm -rf public
-          mkdir public
-          cp -r build/web/. public/
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f public/
-          git diff --cached --quiet && echo "No changes" || git commit -m "build: update public/ [skip ci]"
+          git add -f build/web/
+          git diff --cached --quiet && echo "No changes" || git commit -m "build: update build/web [skip ci]"
           git push

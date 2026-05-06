@@ -44,6 +44,7 @@ app.*.map.json
 
 # Flutter related
 **/build/
+!/build/web
 **/.dart_tool/
 **/flutter_export_environment.sh
 **/generated_plugin_registrant.dart
@@ -62,3 +63,6 @@ potent-howl-228108-firebase-adminsdk-44p85-c5ad0e67dd.json
 
 # Claude Code
 .claude/
+
+# DO deploy staging dir — not needed in repo since DO pulls from build/web
+public/
