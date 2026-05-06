@@ -9,6 +9,7 @@ import 'booking_tokens.dart';
 import 'booking_window.dart';
 import 'email_service.dart';
 import 'holiday_courts.dart';
+import 'israel_time.dart';
 import 'reservation_manager.dart';
 import 'user_manager.dart';
 import 'weather_service.dart';
@@ -75,7 +76,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     _selectedDate = _effectiveToday(now);
     _selectedPartner = _firstSelectablePartner(widget.lastFivePartners);
     _refreshCourtsThenLoad();
@@ -166,7 +167,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       });
     });
 
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     final today = _effectiveToday(now);
     final tomorrow = _effectiveTomorrow(now);
     final me = widget.myUserName ?? '';
@@ -216,13 +217,13 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   }
 
   HeroDay get _heroDay {
-    final today = _effectiveToday(DateTime.now());
+    final today = _effectiveToday(IsraelTime.now());
     return _isSameDay(_selectedDate, today) ? HeroDay.today : HeroDay.tomorrow;
   }
 
   NextUpInfo? get _myNextUp {
     if (widget.myUserName == null) return null;
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     final todayKey = _fmt(_effectiveToday(now));
     for (final r in _myUpcoming) {
       if (r.date == todayKey && r.hour < now.hour) continue;
@@ -248,16 +249,16 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   }
 
   bool _isLocked(int hour) {
-    final viewingToday =
-        _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
+    final now = IsraelTime.now();
+    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(now));
     if (!viewingToday) return false;
-    final delta = hour - DateTime.now().hour;
+    final delta = hour - now.hour;
     return delta > 0 && delta <= 3;
   }
 
   bool _isPast(int hour) {
-    final viewingToday =
-        _isSameDay(_selectedDate, _effectiveToday(DateTime.now()));
+    final now = IsraelTime.now();
+    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(now));
     if (!viewingToday) return false;
     final reservationDt = DateTime(
       _selectedDate.year,
@@ -265,7 +266,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       _selectedDate.day,
       hour,
     );
-    final now = DateTime.now();
     return reservationDt.isBefore(now) ||
         reservationDt.difference(now).inMinutes < 60;
   }
@@ -767,9 +767,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   // }
 
   void _onDayChanged(HeroDay day) {
-    final now = DateTime.now();
-    final target =
-        day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
+    final now = IsraelTime.now();
+    final target = day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
     if (_isSameDay(target, _selectedDate)) return;
     setState(() => _selectedDate = target);
     _refreshCourtsThenLoad();
@@ -835,8 +834,9 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
+    final israelNow = IsraelTime.now();
     final viewingToday = _heroDay == HeroDay.today;
-    final nowHour = viewingToday ? DateTime.now().hour : null;
+    final nowHour = viewingToday ? israelNow.hour : null;
 
     final recents = widget.lastFivePartners.map((name) {
       return RecentPartner(
@@ -864,6 +864,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
               tomorrowTemp: _weatherTomorrow,
               onDayChanged: _onDayChanged,
               onMenuTap: widget.onMenuTap,
+              afterRollover: israelNow.hour >= 22,
             ),
             PartnerBar(
               partnerName: selectedPartnerLabel,

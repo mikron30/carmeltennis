@@ -8,6 +8,7 @@ import 'package:intl/intl.dart' as intl;
 
 import 'booking_tokens.dart';
 import 'holiday_courts.dart';
+import 'israel_time.dart';
 import 'widgets/slot_button.dart';
 import 'widgets/time_grid.dart';
 
@@ -41,7 +42,7 @@ class _TvScreenState extends State<TvScreen> {
   }
 
   void _setEffectiveDates() {
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     final base = DateTime(now.year, now.month, now.day);
     final afterTen = now.hour >= 22;
     _effectiveToday = afterTen ? base.add(const Duration(days: 1)) : base;
@@ -52,7 +53,7 @@ class _TvScreenState extends State<TvScreen> {
 
   void _scheduleRoll() {
     _rollTimer?.cancel();
-    final now = DateTime.now();
+    final now = IsraelTime.now();
     var nextRoll = DateTime(now.year, now.month, now.day, 22);
     if (!nextRoll.isAfter(now)) {
       nextRoll = nextRoll.add(const Duration(days: 1));
