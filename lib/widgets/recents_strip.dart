@@ -123,8 +123,6 @@ class _AddChip extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add, size: 12, color: tokens.ink2),
-              const SizedBox(width: 3),
               Flexible(
                 child: Text(
                   'אחר',
