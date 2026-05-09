@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../booking_tokens.dart';
 
 class RecentPartner {
-  final String name;
-  final bool available;
-  const RecentPartner({required this.name, required this.available});
+  final String label;
+  final String value;
+  const RecentPartner({required this.label, required this.value});
 }
 
 class RecentsStrip extends StatelessWidget {
@@ -24,6 +24,8 @@ class RecentsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
+    final itemCount = recents.length + (onAddTap != null ? 1 : 0);
+
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
@@ -36,63 +38,22 @@ class RecentsStrip extends StatelessWidget {
         height: 24,
         child: Row(
           children: [
-            _Legend(tokens: tokens),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: recents.length + (onAddTap != null ? 1 : 0),
-                separatorBuilder: (_, __) => const SizedBox(width: 5),
-                itemBuilder: (ctx, i) {
-                  if (onAddTap != null && i == recents.length) {
-                    return _AddChip(onTap: onAddTap!, tokens: tokens);
-                  }
-                  final r = recents[i];
-                  final isOn = selected == r.name;
-                  return _Chip(
-                    partner: r,
-                    active: isOn,
-                    tokens: tokens,
-                    onTap: () => onSelect(r.name),
-                  );
-                },
+            for (int i = 0; i < itemCount; i++) ...[
+              Expanded(
+                child: i == recents.length
+                    ? _AddChip(onTap: onAddTap!, tokens: tokens)
+                    : _Chip(
+                        partner: recents[i],
+                        active: selected == recents[i].value,
+                        tokens: tokens,
+                        onTap: () => onSelect(recents[i].value),
+                      ),
               ),
-            ),
+              if (i < itemCount - 1) const SizedBox(width: 5),
+            ],
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  final BookingTokens tokens;
-  const _Legend({required this.tokens});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: tokens.green,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          'פנוי.ה',
-          style: TextStyle(
-            color: tokens.ink2,
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            height: 1,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -102,7 +63,13 @@ class _Chip extends StatelessWidget {
   final bool active;
   final BookingTokens tokens;
   final VoidCallback onTap;
-  const _Chip({required this.partner, required this.active, required this.tokens, required this.onTap});
+
+  const _Chip({
+    required this.partner,
+    required this.active,
+    required this.tokens,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,31 +82,19 @@ class _Chip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(5),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (partner.available) ...[
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: tokens.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                partner.name,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
-                ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Center(
+            child: Text(
+              partner.label,
+              style: TextStyle(
+                color: fg,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                height: 1,
               ),
-            ],
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
         ),
       ),
@@ -164,19 +119,23 @@ class _AddChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(5),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.add, size: 12, color: tokens.ink2),
               const SizedBox(width: 3),
-              Text(
-                'אחר',
-                style: TextStyle(
-                  color: tokens.ink2,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
+              Flexible(
+                child: Text(
+                  'אחר',
+                  style: TextStyle(
+                    color: tokens.ink2,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    height: 1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],

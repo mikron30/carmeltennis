@@ -12,7 +12,6 @@ import 'holiday_courts.dart';
 import 'israel_time.dart';
 import 'reservation_manager.dart';
 import 'user_manager.dart';
-import 'weather_service.dart';
 import 'widgets/booking_sheet.dart';
 import 'widgets/hero_strip.dart';
 import 'widgets/partner_bar.dart';
@@ -70,9 +69,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   final _toast = ToastController();
   final _resManager = ReservationManager();
 
-  int? _weatherToday;
-  int? _weatherTomorrow;
-
   @override
   void initState() {
     super.initState();
@@ -80,16 +76,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     _selectedDate = _effectiveToday(now);
     _selectedPartner = _firstSelectablePartner(widget.lastFivePartners);
     _refreshCourtsThenLoad();
-    _loadWeather();
-  }
-
-  Future<void> _loadWeather() async {
-    final s = await WeatherService.instance.get();
-    if (!mounted || s == null) return;
-    setState(() {
-      _weatherToday = s.todayC;
-      _weatherTomorrow = s.tomorrowC;
-    });
   }
 
   @override
@@ -370,8 +356,13 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   }
 
   String _partnerChipLabel(String name) {
-    if (name.trim() == _adminBookingLabel) return _adminBookingLabel;
-    return _shortName(name);
+    final trimmed = name.trim();
+    if (trimmed == _adminBookingLabel) return 'מנהל';
+    final parts = _displayPartner(trimmed)
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty);
+    final firstName = parts.isEmpty ? trimmed : parts.first;
+    return firstName.characters.take(4).toString();
   }
 
   bool _isAdminBookingSelection(String value) {
@@ -769,7 +760,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   void _onDayChanged(HeroDay day) {
     final now = IsraelTime.now();
-    final target = day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
+    final target =
+        day == HeroDay.today ? _effectiveToday(now) : _effectiveTomorrow(now);
     if (_isSameDay(target, _selectedDate)) return;
     setState(() => _selectedDate = target);
     _refreshCourtsThenLoad();
@@ -838,16 +830,15 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final israelNow = IsraelTime.now();
     final viewingToday = _heroDay == HeroDay.today;
     final nowHour = viewingToday ? israelNow.hour : null;
+    final firstToggleDate = _effectiveToday(israelNow);
+    final secondToggleDate = _effectiveTomorrow(israelNow);
 
     final recents = widget.lastFivePartners.map((name) {
       return RecentPartner(
-        name: _partnerChipLabel(name),
-        available: !_partnerHasReservationOnSelectedDay(name),
+        label: _partnerChipLabel(name),
+        value: name,
       );
     }).toList();
-    final selectedShort = _selectedPartner == null
-        ? null
-        : _displayReservationName(_selectedPartner!);
     final selectedPartnerLabel =
         _selectedPartner == null ? null : _displayPartner(_selectedPartner!);
 
@@ -861,8 +852,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
               day: _heroDay,
               date: _selectedDate,
               nextUp: _myNextUp,
-              todayTemp: _weatherToday,
-              tomorrowTemp: _weatherTomorrow,
+              todayDayOfMonth: firstToggleDate.day,
+              tomorrowDayOfMonth: secondToggleDate.day,
               onDayChanged: _onDayChanged,
               onMenuTap: widget.onMenuTap,
               afterRollover: israelNow.hour >= 22,
@@ -878,14 +869,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
             ),
             RecentsStrip(
               recents: recents,
-              selected: selectedShort,
-              onSelect: (shortName) async {
-                final match = widget.lastFivePartners.firstWhere(
-                  (n) => _partnerChipLabel(n) == shortName,
-                  orElse: () => shortName,
-                );
-                await _selectPartner(match);
-              },
+              selected: _selectedPartner,
+              onSelect: _selectPartner,
               onAddTap: _onAddPartnerTap,
             ),
             if (widget.isManager)

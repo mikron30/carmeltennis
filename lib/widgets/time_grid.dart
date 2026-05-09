@@ -201,13 +201,6 @@ class _HourRow extends StatelessWidget {
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                    if (busy) ...[
-                      const SizedBox(width: 2),
-                      Text(
-                        '●',
-                        style: TextStyle(color: tokens.clay, fontSize: 7),
-                      ),
-                    ],
                   ],
                 ),
               ),

@@ -16,6 +16,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
   final Color clayInk;
   final Color green;
   final Color greenTint;
+  final Color mine;
+  final Color mineInk;
   final Color pastBg;
   final Color pastInk;
   final Color warn;
@@ -34,6 +36,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
     required this.clayInk,
     required this.green,
     required this.greenTint,
+    required this.mine,
+    required this.mineInk,
     required this.pastBg,
     required this.pastInk,
     required this.warn,
@@ -53,6 +57,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
     clayInk: Color(0xFFA8431F),
     green: Color(0xFF1F6F4A),
     greenTint: Color(0xFFE2F1E9),
+    mine: Color(0xFF2F6473),
+    mineInk: Color(0xFFFFFFFF),
     pastBg: Color(0xFFF7EFE7),
     pastInk: Color(0xFFC8B8AC),
     warn: Color(0xFFFFD6A8),
@@ -79,6 +85,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
     clayInk: Color(0xFFF5A884),
     green: Color(0xFF3AA674),
     greenTint: Color(0xFF0F2A1F),
+    mine: Color(0xFF2E7C86),
+    mineInk: Color(0xFFFFFFFF),
     pastBg: Color(0xFF141A19),
     pastInk: Color(0xFF3A4744),
     warn: Color(0xFFFFB877),
@@ -112,6 +120,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
     Color? clayInk,
     Color? green,
     Color? greenTint,
+    Color? mine,
+    Color? mineInk,
     Color? pastBg,
     Color? pastInk,
     Color? warn,
@@ -130,6 +140,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
       clayInk: clayInk ?? this.clayInk,
       green: green ?? this.green,
       greenTint: greenTint ?? this.greenTint,
+      mine: mine ?? this.mine,
+      mineInk: mineInk ?? this.mineInk,
       pastBg: pastBg ?? this.pastBg,
       pastInk: pastInk ?? this.pastInk,
       warn: warn ?? this.warn,
@@ -153,6 +165,8 @@ class BookingTokens extends ThemeExtension<BookingTokens> {
       clayInk: Color.lerp(clayInk, other.clayInk, t)!,
       green: Color.lerp(green, other.green, t)!,
       greenTint: Color.lerp(greenTint, other.greenTint, t)!,
+      mine: Color.lerp(mine, other.mine, t)!,
+      mineInk: Color.lerp(mineInk, other.mineInk, t)!,
       pastBg: Color.lerp(pastBg, other.pastBg, t)!,
       pastInk: Color.lerp(pastInk, other.pastInk, t)!,
       warn: Color.lerp(warn, other.warn, t)!,

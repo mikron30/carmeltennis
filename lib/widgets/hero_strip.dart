@@ -21,8 +21,8 @@ class HeroStrip extends StatelessWidget {
   final HeroDay day;
   final DateTime date;
   final NextUpInfo? nextUp;
-  final int? todayTemp;
-  final int? tomorrowTemp;
+  final int todayDayOfMonth;
+  final int tomorrowDayOfMonth;
   final ValueChanged<HeroDay> onDayChanged;
   final VoidCallback? onMenuTap;
   final bool afterRollover;
@@ -32,8 +32,8 @@ class HeroStrip extends StatelessWidget {
     required this.day,
     required this.date,
     required this.nextUp,
-    required this.todayTemp,
-    required this.tomorrowTemp,
+    required this.todayDayOfMonth,
+    required this.tomorrowDayOfMonth,
     required this.onDayChanged,
     this.onMenuTap,
     this.afterRollover = false,
@@ -183,8 +183,8 @@ class HeroStrip extends StatelessWidget {
           day: day,
           todayLabel: _todayLabel,
           tomorrowLabel: _tomorrowLabel,
-          todayTemp: todayTemp,
-          tomorrowTemp: tomorrowTemp,
+          todayDayOfMonth: todayDayOfMonth,
+          tomorrowDayOfMonth: tomorrowDayOfMonth,
           onChanged: onDayChanged,
           tokens: tokens,
         ),
@@ -241,8 +241,8 @@ class HeroStrip extends StatelessWidget {
           day: day,
           todayLabel: _todayLabel,
           tomorrowLabel: _tomorrowLabel,
-          todayTemp: todayTemp,
-          tomorrowTemp: tomorrowTemp,
+          todayDayOfMonth: todayDayOfMonth,
+          tomorrowDayOfMonth: tomorrowDayOfMonth,
           onChanged: onDayChanged,
           tokens: BookingTokens.of(context),
         ),
@@ -275,8 +275,8 @@ class _DayToggle extends StatelessWidget {
   final HeroDay day;
   final String todayLabel;
   final String tomorrowLabel;
-  final int? todayTemp;
-  final int? tomorrowTemp;
+  final int todayDayOfMonth;
+  final int tomorrowDayOfMonth;
   final ValueChanged<HeroDay> onChanged;
   final BookingTokens tokens;
 
@@ -284,8 +284,8 @@ class _DayToggle extends StatelessWidget {
     required this.day,
     required this.todayLabel,
     required this.tomorrowLabel,
-    required this.todayTemp,
-    required this.tomorrowTemp,
+    required this.todayDayOfMonth,
+    required this.tomorrowDayOfMonth,
     required this.onChanged,
     required this.tokens,
   });
@@ -303,14 +303,14 @@ class _DayToggle extends StatelessWidget {
         children: [
           _segment(
             label: todayLabel,
-            temp: todayTemp,
+            dayOfMonth: todayDayOfMonth,
             active: day == HeroDay.today,
             onTap: () => onChanged(HeroDay.today),
           ),
           const SizedBox(width: 1),
           _segment(
             label: tomorrowLabel,
-            temp: tomorrowTemp,
+            dayOfMonth: tomorrowDayOfMonth,
             active: day == HeroDay.tomorrow,
             onTap: () => onChanged(HeroDay.tomorrow),
           ),
@@ -319,12 +319,14 @@ class _DayToggle extends StatelessWidget {
     );
   }
 
-  Widget _segment({required String label, required int? temp, required bool active, required VoidCallback onTap}) {
+  Widget _segment({
+    required String label,
+    required int dayOfMonth,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
     final fg = active ? tokens.clayD : Colors.white;
-    final isWarn = temp != null && temp > 27;
-    final tempColor = isWarn
-        ? (active ? tokens.clay : tokens.warn)
-        : (active ? tokens.clayD : Colors.white.withOpacity(0.8));
+    final dateColor = active ? tokens.clayD : Colors.white.withOpacity(0.8);
     return Material(
       color: active ? Colors.white : Colors.transparent,
       borderRadius: BorderRadius.circular(5),
@@ -345,19 +347,17 @@ class _DayToggle extends StatelessWidget {
                   height: 1,
                 ),
               ),
-              if (temp != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '$temp°',
-                  style: TextStyle(
-                    color: tempColor,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+              const SizedBox(width: 4),
+              Text(
+                '$dayOfMonth',
+                style: TextStyle(
+                  color: dateColor,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
-              ],
+              ),
             ],
           ),
         ),

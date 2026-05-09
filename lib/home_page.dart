@@ -268,7 +268,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
 
     // 3) Logged in and resolved → normal UI
     return Scaffold(
-      drawer: _buildDrawer(),
+      endDrawer: _buildDrawer(),
       body: Builder(
         builder: (scaffoldCtx) => BookingScreenV31(
           isManager: isManager,
@@ -277,7 +277,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
           allUsers: suggestionsList,
           darkMode: _darkMode,
           onDarkModeToggle: _setDarkPreference,
-          onMenuTap: () => Scaffold.of(scaffoldCtx).openDrawer(),
+          onMenuTap: () => Scaffold.of(scaffoldCtx).openEndDrawer(),
         ),
       ),
     );

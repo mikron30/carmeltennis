@@ -211,7 +211,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
       height: 1.2,
     );
     final secondaryStyle = base.copyWith(
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: FontWeight.w800,
     );
 
@@ -268,7 +268,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
         return BoxDecoration(color: t.green, borderRadius: radius);
       case SlotState.preview:
         return BoxDecoration(
-          color: t.clayTint,
+          color: t.surface,
           borderRadius: radius,
           border: Border.all(color: t.clay, width: 2, style: BorderStyle.solid),
         );
@@ -278,14 +278,13 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
         return BoxDecoration(color: t.clay, borderRadius: radius);
       case SlotState.taken:
         return BoxDecoration(
-          color: t.surface,
+          color: t.clay,
           borderRadius: radius,
-          border: Border.all(color: t.line, width: 1.5),
         );
       case SlotState.mine:
       case SlotState.mineLocked:
         return BoxDecoration(
-          color: t.clay,
+          color: t.mine,
           borderRadius: radius,
           boxShadow: t.shadowMine,
         );
@@ -309,13 +308,14 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
       case SlotState.free:
       case SlotState.pending:
       case SlotState.failed:
+        return Colors.white;
       case SlotState.mine:
       case SlotState.mineLocked:
-        return Colors.white;
+        return t.mineInk;
       case SlotState.preview:
         return t.clayInk;
       case SlotState.taken:
-        return t.ink2;
+        return Colors.white;
       case SlotState.past:
         return t.pastInk;
       case SlotState.coach:
