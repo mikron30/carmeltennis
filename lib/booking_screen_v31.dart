@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'booking_density.dart';
 import 'booking_limits.dart';
 import 'booking_tokens.dart';
 import 'booking_window.dart';
@@ -13,8 +14,8 @@ import 'israel_time.dart';
 import 'reservation_manager.dart';
 import 'user_manager.dart';
 import 'widgets/booking_sheet.dart';
+import 'widgets/confirm_banner.dart';
 import 'widgets/hero_strip.dart';
-import 'widgets/partner_bar.dart';
 import 'widgets/recents_strip.dart';
 import 'widgets/slot_button.dart';
 import 'widgets/time_grid.dart';
@@ -54,14 +55,11 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   StreamSubscription<QuerySnapshot>? _selectedDaySub;
   StreamSubscription<QuerySnapshot>? _weekEveningSub;
-  StreamSubscription<QuerySnapshot>? _myUpcomingSub;
   List<_Reservation> _selectedDayReservations = [];
   Map<int, Map<int, _Reservation>> _selectedDayByCell = {};
-  List<_Reservation> _myUpcoming = [];
   int _myWeeklyEveningCount = 0;
 
   String? _preview;
-  Timer? _previewTimer;
   String? _pendingKey;
   String? _failedKey;
   bool _loadingDay = false;
@@ -91,10 +89,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   @override
   void dispose() {
-    _previewTimer?.cancel();
     _selectedDaySub?.cancel();
     _weekEveningSub?.cancel();
-    _myUpcomingSub?.cancel();
     _toast.dismiss();
     super.dispose();
   }
@@ -132,7 +128,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   void _resubscribe() {
     _selectedDaySub?.cancel();
     _weekEveningSub?.cancel();
-    _myUpcomingSub?.cancel();
 
     final selectedKey = _fmt(_selectedDate);
     _selectedDaySub = FirebaseFirestore.instance
@@ -142,20 +137,13 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
         .listen((snap) {
       if (!mounted) return;
       final list = snap.docs.map(_Reservation.fromDoc).toList();
-      final byCell = <int, Map<int, _Reservation>>{};
-      for (final r in list) {
-        (byCell[r.courtNumber] ??= {})[r.hour] = r;
-      }
       setState(() {
         _selectedDayReservations = list;
-        _selectedDayByCell = byCell;
+        _selectedDayByCell = _buildByCell(list);
         _loadingDay = false;
       });
     });
 
-    final now = IsraelTime.now();
-    final today = _effectiveToday(now);
-    final tomorrow = _effectiveTomorrow(now);
     final me = widget.myUserName ?? '';
     if (me.isNotEmpty) {
       final weekStartKey = bookingDateKey(startOfBookingWeek(_selectedDate));
@@ -176,29 +164,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
         }
         setState(() => _myWeeklyEveningCount = counted.length);
       });
-
-      final todayKey = _fmt(today);
-      final tomorrowKey = _fmt(tomorrow);
-      _myUpcomingSub = FirebaseFirestore.instance
-          .collection('reservations')
-          .where('date', whereIn: [todayKey, tomorrowKey])
-          .snapshots()
-          .listen((snap) {
-            if (!mounted) return;
-            final list = <_Reservation>[];
-            for (final doc in snap.docs) {
-              final r = _Reservation.fromDoc(doc);
-              if (r.involves(me)) list.add(r);
-            }
-            list.sort((a, b) {
-              final cmp = a.date.compareTo(b.date);
-              return cmp != 0 ? cmp : a.hour.compareTo(b.hour);
-            });
-            setState(() => _myUpcoming = list);
-          });
     } else {
       _myWeeklyEveningCount = 0;
-      _myUpcoming = [];
     }
   }
 
@@ -207,27 +174,18 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     return _isSameDay(_selectedDate, today) ? HeroDay.today : HeroDay.tomorrow;
   }
 
-  NextUpInfo? get _myNextUp {
-    if (widget.myUserName == null) return null;
-    final now = IsraelTime.now();
-    final todayKey = _fmt(_effectiveToday(now));
-    for (final r in _myUpcoming) {
-      if (r.date == todayKey && r.hour < now.hour) continue;
-      final partner = r.userName == widget.myUserName ? r.partner : r.userName;
-      return NextUpInfo(
-        hour: r.hour,
-        courtNumber: r.courtNumber,
-        partnerShort: _displayReservationName(partner),
-        dateLabel: r.date == todayKey ? null : 'מחר',
-      );
-    }
-    return null;
-  }
-
   int get _usedEvenings {
     final me = widget.myUserName ?? '';
     if (me.isEmpty) return 0;
     return _myWeeklyEveningCount.clamp(0, kWeeklyEveningQuota);
+  }
+
+  Map<int, Map<int, _Reservation>> _buildByCell(List<_Reservation> list) {
+    final byCell = <int, Map<int, _Reservation>>{};
+    for (final r in list) {
+      (byCell[r.courtNumber] ??= {})[r.hour] = r;
+    }
+    return byCell;
   }
 
   bool _partnerHasReservationOnSelectedDay(String name) {
@@ -297,8 +255,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
             : reservation.userName;
         return SlotData(
           state: state,
-          primaryLabel: _shortName(_displayPartner(partner)),
-          secondaryLabel: _shortName(widget.myUserName!),
+          primaryLabel: _firstName(widget.myUserName!),
+          secondaryLabel: _shortName(_displayPartner(partner)),
           onTap: () => _handleTap(courtUiIndex, hour),
         );
       }
@@ -324,7 +282,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     if (isPreview) {
       return SlotData(
         state: SlotState.preview,
-        primaryLabel: 'פנוי',
+        primaryLabel: '${hour.toString().padLeft(2, '0')}:00',
         onTap: () => _handleTap(courtUiIndex, hour),
       );
     }
@@ -347,12 +305,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     if (!raw.startsWith('!')) return null;
     final label = raw.substring(1).trim();
     return label.isEmpty ? _adminBookingLabel : label;
-  }
-
-  String _displayReservationName(String raw) {
-    final custom = _customBookingLabel(raw);
-    if (custom != null) return custom;
-    return _shortName(_displayPartner(raw));
   }
 
   String _partnerChipLabel(String name) {
@@ -390,6 +342,13 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     final parts = n.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length == 1) return parts.first;
     return '${parts.first} ${parts.last.characters.first}.';
+  }
+
+  String _firstName(String fullName) {
+    final n = fullName.trim();
+    if (n.isEmpty) return n;
+    final parts = n.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    return parts.isEmpty ? n : parts.first;
   }
 
   Future<String?> _showAdminBookingDialog() async {
@@ -457,9 +416,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
           _openCancelSheet(reservation, courtUiIndex, hour);
         }
         // Waitlist disabled — see docs/waitlist.md for the planned feature.
-        // } else {
-        //   _openWaitlistSheet(reservation);
-        // }
       }
       return;
     }
@@ -471,45 +427,55 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     final key = '$courtUiIndex-$hour';
     if (_preview == key) {
-      _previewTimer?.cancel();
-      setState(() {
-        _preview = null;
-        _pendingKey = key;
-      });
-      try {
-        await _commitBooking(courtUiIndex, hour);
-        if (!mounted) return;
-        setState(() => _pendingKey = null);
-        _toast.show(context, 'הוזמן', kind: ToastKind.good);
-      } on _BookingValidationError catch (e) {
-        // Async validation rejected the booking — toast + revert silently.
-        if (!mounted) return;
-        setState(() => _pendingKey = null);
-        _toast.show(context, e.message, kind: ToastKind.warn);
-      } catch (_) {
-        // Real network/write failure — shake + warn.
-        if (!mounted) return;
-        setState(() {
-          _pendingKey = null;
-          _failedKey = key;
-        });
-        _toast.show(context, 'נכשל — נסה שוב', kind: ToastKind.warn);
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (!mounted) return;
-          setState(() => _failedKey = null);
-        });
-      }
+      await _commitPreview();
       return;
     }
 
     setState(() => _preview = key);
-    _previewTimer?.cancel();
-    _previewTimer = Timer(const Duration(milliseconds: 3500), () {
+  }
+
+  Future<void> _commitPreview() async {
+    final key = _preview;
+    if (key == null) return;
+    final parts = key.split('-');
+    if (parts.length != 2) return;
+    final courtUiIndex = int.tryParse(parts[0]);
+    final hour = int.tryParse(parts[1]);
+    if (courtUiIndex == null || hour == null) return;
+
+    if (!_validateSync()) return;
+
+    setState(() {
+      _preview = null;
+      _pendingKey = key;
+    });
+    try {
+      await _commitBooking(courtUiIndex, hour);
+      if (!mounted) return;
+      setState(() => _pendingKey = null);
+      _toast.show(context, 'הוזמן', kind: ToastKind.good);
+    } on _BookingValidationError catch (e) {
+      if (!mounted) return;
+      setState(() => _pendingKey = null);
+      _toast.show(context, e.message, kind: ToastKind.warn);
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        if (_preview == key) _preview = null;
+        _pendingKey = null;
+        _failedKey = key;
       });
-    });
+      _toast.show(context, 'נכשל — נסה שוב', kind: ToastKind.warn);
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        setState(() => _failedKey = null);
+      });
+    }
+  }
+
+  void _cancelPreview() {
+    if (_preview != null) {
+      setState(() => _preview = null);
+    }
   }
 
   bool _validateSync() {
@@ -691,12 +657,24 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
           subtitle: 'תישלח התראה לשותפ.ה',
           onTap: () async {
             Navigator.of(context).pop();
+            // Optimistic UI: remove locally first, then confirm with Firestore.
+            final prevReservations = _selectedDayReservations;
+            final prevByCell = _selectedDayByCell;
+            final nextReservations =
+                prevReservations.where((x) => x.docId != r.docId).toList();
+            setState(() {
+              _selectedDayReservations = nextReservations;
+              _selectedDayByCell = _buildByCell(nextReservations);
+            });
+            _toast.show(context, 'ההזמנה בוטלה', kind: ToastKind.info);
             try {
               await _cancelReservation(r);
-              if (!mounted) return;
-              _toast.show(context, 'ההזמנה בוטלה', kind: ToastKind.info);
             } catch (_) {
               if (!mounted) return;
+              setState(() {
+                _selectedDayReservations = prevReservations;
+                _selectedDayByCell = prevByCell;
+              });
               _toast.show(context, 'הביטול נכשל', kind: ToastKind.warn);
             }
           },
@@ -827,83 +805,133 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
+    final spec = BookingDensitySpec.of(context);
     final israelNow = IsraelTime.now();
     final viewingToday = _heroDay == HeroDay.today;
     final nowHour = viewingToday ? israelNow.hour : null;
-    final firstToggleDate = _effectiveToday(israelNow);
-    final secondToggleDate = _effectiveTomorrow(israelNow);
 
     final recents = widget.lastFivePartners.map((name) {
       return RecentPartner(
         label: _partnerChipLabel(name),
         value: name,
+        available: !_partnerHasReservationOnSelectedDay(name),
       );
     }).toList();
-    final selectedPartnerLabel =
-        _selectedPartner == null ? null : _displayPartner(_selectedPartner!);
+    // Selected partner picked from the add-partner autocomplete isn't in
+    // `lastFivePartners` yet — prepend them so the active chip is visible.
+    final sel = _selectedPartner;
+    if (sel != null &&
+        sel.trim().isNotEmpty &&
+        !widget.lastFivePartners.contains(sel)) {
+      recents.insert(
+        0,
+        RecentPartner(
+          label: _partnerChipLabel(sel),
+          value: sel,
+          available: !_partnerHasReservationOnSelectedDay(sel),
+        ),
+      );
+    }
 
     return Container(
       color: tokens.bg,
       child: SafeArea(
         bottom: false,
-        child: Column(
+        child: Stack(
           children: [
-            HeroStrip(
-              day: _heroDay,
-              date: _selectedDate,
-              nextUp: _myNextUp,
-              todayDayOfMonth: firstToggleDate.day,
-              tomorrowDayOfMonth: secondToggleDate.day,
-              onDayChanged: _onDayChanged,
-              onMenuTap: widget.onMenuTap,
-              afterRollover: israelNow.hour >= 22,
-            ),
-            PartnerBar(
-              partnerName: selectedPartnerLabel,
-              partnerAvailable: _selectedPartner != null &&
-                  !_partnerHasReservationOnSelectedDay(_selectedPartner!),
-              usedEvenings: _usedEvenings,
-              darkMode: widget.darkMode,
-              onRefreshTap: _refreshCourtsThenLoad,
-              onThemeToggle: () => widget.onDarkModeToggle(!widget.darkMode),
-            ),
-            RecentsStrip(
-              recents: recents,
-              selected: _selectedPartner,
-              onSelect: _selectPartner,
-              onAddTap: _onAddPartnerTap,
-            ),
-            if (widget.isManager)
-              Container(
-                color: tokens.surface,
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 12, color: tokens.ink2),
-                    const SizedBox(width: 6),
-                    Text(
-                      DateFormat('d.M.yyyy').format(_selectedDate),
-                      style: TextStyle(
-                          color: tokens.ink2,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _onPickDate,
-                      child: const Text('בחר תאריך'),
-                    ),
-                  ],
+            Column(
+              children: [
+                HeroStrip(
+                  day: _heroDay,
+                  onDayChanged: _onDayChanged,
+                  usedEvenings: _usedEvenings,
+                  darkMode: widget.darkMode,
+                  onThemeToggle: () => widget.onDarkModeToggle(!widget.darkMode),
+                  onMenuTap: widget.onMenuTap,
+                  afterRollover: israelNow.hour >= 22,
                 ),
-              ),
-            TimeGrid(
-              numberOfCourts: _numberOfCourts,
-              nowHour: nowHour,
-              slotBuilder: _resolveSlot,
-              loading: _loadingDay,
+                RecentsStrip(
+                  recents: recents,
+                  selected: _selectedPartner,
+                  onSelect: _selectPartner,
+                  onAddTap: _onAddPartnerTap,
+                ),
+                if (widget.isManager)
+                  Container(
+                    color: tokens.surface,
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 12, color: tokens.ink2),
+                        const SizedBox(width: 6),
+                        Text(
+                          DateFormat('d.M.yyyy').format(_selectedDate),
+                          style: TextStyle(
+                              color: tokens.ink2,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _onPickDate,
+                          child: const Text('בחר תאריך'),
+                        ),
+                      ],
+                    ),
+                  ),
+                TimeGrid(
+                  numberOfCourts: _numberOfCourts,
+                  nowHour: nowHour,
+                  slotBuilder: _resolveSlot,
+                  loading: _loadingDay,
+                ),
+              ],
             ),
+            if (_preview != null)
+              Positioned(
+                left: spec.bannerInset,
+                right: spec.bannerInset,
+                bottom: spec.bannerInset,
+                child: _buildConfirmBanner(),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildConfirmBanner() {
+    final key = _preview!;
+    final parts = key.split('-');
+    final courtUiIndex = int.tryParse(parts[0]) ?? 0;
+    final hour = int.tryParse(parts[1]) ?? 0;
+    final dbCourtNumber = _numberOfCourts - courtUiIndex;
+
+    final partnerRaw = _selectedPartner ?? '';
+    final partnerDisplay = _displayPartner(partnerRaw);
+    final partnerShort = _shortName(partnerDisplay);
+    final initial = partnerShort.isEmpty ? '?' : partnerShort.characters.first;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (ctx, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 40),
+            child: child,
+          ),
+        );
+      },
+      child: ConfirmBanner(
+        partnerInitial: initial,
+        partnerShort: partnerShort,
+        hour: hour,
+        courtNumber: dbCourtNumber,
+        onConfirm: _commitPreview,
+        onCancel: _cancelPreview,
       ),
     );
   }

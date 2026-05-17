@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../booking_density.dart';
 import '../booking_tokens.dart';
 
 enum SlotState { free, preview, pending, failed, taken, mine, mineLocked, past, coach }
@@ -32,7 +33,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
     super.initState();
     _pulse = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 900),
     );
     _shimmer = AnimationController(
       vsync: this,
@@ -82,7 +83,8 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
-    final decoration = _decorationFor(tokens);
+    final spec = BookingDensitySpec.of(context);
+    final decoration = _decorationFor(tokens, spec);
     final textColor = _textColorFor(tokens);
     final cursor = widget.state == SlotState.past
         ? SystemMouseCursors.forbidden
@@ -92,11 +94,11 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
 
     Widget child = AnimatedContainer(
       duration: const Duration(milliseconds: 80),
-      constraints: const BoxConstraints(minHeight: 38),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      constraints: BoxConstraints(minHeight: spec.slotMinHeight),
+      padding: spec.slotPadding,
       decoration: decoration,
       alignment: Alignment.center,
-      child: _buildLabel(textColor),
+      child: _buildLabel(textColor, spec),
     );
 
     child = Stack(
@@ -106,7 +108,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
           Positioned.fill(
             child: IgnorePointer(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(spec.slotRadius),
                 child: CustomPaint(painter: _DiagonalHatchPainter()),
               ),
             ),
@@ -119,11 +121,11 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
                 animation: _pulse,
                 builder: (_, __) {
                   final t = (math.sin(_pulse.value * 2 * math.pi) + 1) / 2;
-                  final spread = 6 * t;
+                  final spread = spec.slotPreviewPulseMaxSpread * t;
                   final opacity = 0.4 * (1 - t);
                   return Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(spec.slotRadius),
                       boxShadow: [
                         BoxShadow(
                           color: tokens.clay.withOpacity(opacity),
@@ -141,7 +143,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
           Positioned.fill(
             child: IgnorePointer(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(spec.slotRadius),
                 child: AnimatedBuilder(
                   animation: _shimmer,
                   builder: (_, __) {
@@ -203,74 +205,145 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildLabel(Color color) {
-    final base = TextStyle(
-      color: color,
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      height: 1.2,
-    );
-    final secondaryStyle = base.copyWith(
-      fontSize: 11,
-      fontWeight: FontWeight.w800,
-    );
-
+  Widget _buildLabel(Color color, BookingDensitySpec spec) {
     final primary = widget.primaryLabel ?? '';
     final secondary = widget.secondaryLabel;
 
-    final mineBadge = widget.state == SlotState.mine
-        ? '·${secondary ?? 'שלי'}'
-        : (widget.state == SlotState.mineLocked ? '·נעול' : null);
+    switch (widget.state) {
+      case SlotState.mine:
+      case SlotState.mineLocked:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              primary,
+              style: TextStyle(
+                color: color,
+                fontSize: spec.slotMinePrimaryFontSize,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: spec.slotMineGap),
+            Text(
+              widget.state == SlotState.mineLocked
+                  ? 'עם ${secondary ?? ''} 🔒'
+                  : 'עם ${secondary ?? ''}',
+              style: TextStyle(
+                color: color.withOpacity(0.88),
+                fontSize: spec.slotMineSecondaryFontSize,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
 
-    if (widget.state == SlotState.preview) {
-      return Text.rich(
-        TextSpan(children: [
-          TextSpan(text: primary.isEmpty ? 'פנוי' : primary, style: base),
-          TextSpan(text: ' ·אישור?', style: secondaryStyle),
-        ]),
-        textAlign: TextAlign.center,
-      );
-    }
-    if (mineBadge != null) {
-      return Text.rich(
-        TextSpan(children: [
-          TextSpan(text: primary, style: base),
-          TextSpan(
-            text: ' $mineBadge',
-            style: secondaryStyle.copyWith(color: color.withOpacity(0.85)),
+      case SlotState.preview:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              primary.isEmpty ? 'פנוי' : primary,
+              style: TextStyle(
+                color: color,
+                fontSize: spec.slotPreviewPrimaryFontSize,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: spec.slotMineGap),
+            Text(
+              'לחצ.י שוב',
+              style: TextStyle(
+                color: color.withOpacity(0.85),
+                fontSize: spec.slotPreviewSecondaryFontSize,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+                letterSpacing: 0.4,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+
+      case SlotState.taken:
+        return Text(
+          primary,
+          style: TextStyle(
+            color: color,
+            fontSize: spec.slotTakenFontSize,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
           ),
-        ]),
-        textAlign: TextAlign.center,
-        overflow: TextOverflow.ellipsis,
-      );
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        );
+
+      case SlotState.past:
+        return Text(
+          primary,
+          style: TextStyle(
+            color: color,
+            fontSize: spec.slotPastFontSize,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        );
+
+      default:
+        return Text(
+          primary,
+          style: TextStyle(
+            color: color,
+            fontSize: spec.slotFontSize,
+            fontWeight: spec.slotFontWeight,
+            height: 1.2,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+        );
     }
-    if (widget.state == SlotState.taken && secondary != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(primary, style: base, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-        ],
-      );
-    }
-    return Text(
-      primary,
-      style: base,
-      textAlign: TextAlign.center,
-      overflow: TextOverflow.ellipsis,
-      maxLines: 2,
-    );
   }
 
-  BoxDecoration _decorationFor(BookingTokens t) {
-    final radius = BorderRadius.circular(7);
+  BoxDecoration _decorationFor(BookingTokens t, BookingDensitySpec spec) {
+    final radius = BorderRadius.circular(spec.slotRadius);
     switch (widget.state) {
       case SlotState.free:
-        return BoxDecoration(color: t.green, borderRadius: radius);
+        return BoxDecoration(
+          color: t.green,
+          borderRadius: radius,
+          border: Border.all(
+            color: Colors.transparent,
+            width: spec.slotFreeBorderWidth,
+          ),
+        );
       case SlotState.preview:
         return BoxDecoration(
-          color: t.surface,
+          color: t.clayTint,
           borderRadius: radius,
-          border: Border.all(color: t.clay, width: 2, style: BorderStyle.solid),
+          border: Border.all(
+            color: t.clay,
+            width: spec.slotPreviewBorderWidth,
+          ),
         );
       case SlotState.pending:
         return BoxDecoration(color: t.green.withOpacity(0.65), borderRadius: radius);
@@ -286,13 +359,17 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
         return BoxDecoration(
           color: t.mine,
           borderRadius: radius,
+          border: Border.all(
+            color: Color.lerp(t.mine, Colors.black, 0.3)!,
+            width: spec.slotMineBorderWidth,
+          ),
           boxShadow: t.shadowMine,
         );
       case SlotState.past:
         return BoxDecoration(
           color: t.pastBg,
           borderRadius: radius,
-          border: Border.all(color: t.line, width: 1.5),
+          border: Border.all(color: t.line2, width: spec.slotPastBorderWidth),
         );
       case SlotState.coach:
         return BoxDecoration(
@@ -330,7 +407,7 @@ class _DiagonalHatchPainter extends CustomPainter {
     final paint = Paint()
       ..color = Colors.white.withOpacity(0.07)
       ..strokeWidth = 1;
-    const spacing = 7.0;
+    const spacing = 6.0;
     final diag = size.width + size.height;
     for (double offset = -size.height; offset < diag; offset += spacing) {
       canvas.drawLine(

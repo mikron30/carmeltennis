@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../booking_density.dart';
 import '../booking_tokens.dart';
 
 class SheetOption {
@@ -21,6 +22,7 @@ Future<void> showBookingSheet({
   required List<SheetOption> options,
 }) {
   final tokens = BookingTokens.of(context);
+  final spec = BookingDensitySpec.of(context);
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -29,6 +31,7 @@ Future<void> showBookingSheet({
     builder: (ctx) {
       return _SheetCard(
         tokens: tokens,
+        spec: spec,
         title: title,
         subtitle: subtitle,
         options: options,
@@ -39,11 +42,13 @@ Future<void> showBookingSheet({
 
 class _SheetCard extends StatelessWidget {
   final BookingTokens tokens;
+  final BookingDensitySpec spec;
   final String title;
   final String subtitle;
   final List<SheetOption> options;
   const _SheetCard({
     required this.tokens,
+    required this.spec,
     required this.title,
     required this.subtitle,
     required this.options,
@@ -54,12 +59,12 @@ class _SheetCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(spec.sheetCardRadius),
+          topRight: Radius.circular(spec.sheetCardRadius),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+      padding: spec.sheetCardPadding,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -68,18 +73,27 @@ class _SheetCard extends StatelessWidget {
             title,
             style: TextStyle(
               color: tokens.ink,
-              fontSize: 18,
+              fontSize: spec.sheetTitleFontSize,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: TextStyle(color: tokens.ink2, fontSize: 12),
+            style: TextStyle(
+              color: tokens.ink2,
+              fontSize: spec.sheetSubFontSize,
+              height: 1.4,
+            ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: spec.sheetSubBottomMargin),
           for (int i = 0; i < options.length; i++) ...[
-            _OptionRow(option: options[i], tokens: tokens, isFirst: i == 0),
+            _OptionRow(
+              option: options[i],
+              tokens: tokens,
+              spec: spec,
+              isFirst: i == 0,
+            ),
           ],
         ],
       ),
@@ -90,8 +104,14 @@ class _SheetCard extends StatelessWidget {
 class _OptionRow extends StatelessWidget {
   final SheetOption option;
   final BookingTokens tokens;
+  final BookingDensitySpec spec;
   final bool isFirst;
-  const _OptionRow({required this.option, required this.tokens, required this.isFirst});
+  const _OptionRow({
+    required this.option,
+    required this.tokens,
+    required this.spec,
+    required this.isFirst,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +125,7 @@ class _OptionRow extends StatelessWidget {
                 : BorderSide(color: tokens.line, width: 1),
           ),
         ),
+        constraints: BoxConstraints(minHeight: spec.sheetButtonMinHeight),
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
@@ -114,14 +135,14 @@ class _OptionRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: tokens.clayTint,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(spec.sheetButtonRadius),
               ),
               child: Text(
                 option.glyph,
                 style: TextStyle(
                   color: tokens.clayInk,
                   fontWeight: FontWeight.w800,
-                  fontSize: 14,
+                  fontSize: spec.sheetButtonFontSize - 1,
                 ),
               ),
             ),
@@ -134,14 +155,18 @@ class _OptionRow extends StatelessWidget {
                     option.title,
                     style: TextStyle(
                       color: tokens.ink,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontSize: spec.sheetButtonFontSize,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Text(
-                    option.subtitle,
-                    style: TextStyle(color: tokens.ink2, fontSize: 11),
-                  ),
+                  if (option.subtitle.isNotEmpty)
+                    Text(
+                      option.subtitle,
+                      style: TextStyle(
+                        color: tokens.ink2,
+                        fontSize: spec.sheetSubFontSize - 2,
+                      ),
+                    ),
                 ],
               ),
             ),
