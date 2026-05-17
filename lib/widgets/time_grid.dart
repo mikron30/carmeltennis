@@ -90,27 +90,56 @@ class TimeGrid extends StatelessWidget {
                 : null,
           ),
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.fromLTRB(
-                  spec.courtHeaderPadding.left, 0, spec.courtHeaderPadding.right, 12),
-              itemCount: kHours.length,
-              itemBuilder: (ctx, i) {
-                final hour = kHours[i];
-                final showNow = nowHour != null && hour == nowHour! + 1;
-                return Column(
-                  children: [
-                    if (showNow) _NowDivider(tokens: tokens, nowHour: nowHour!),
-                    _HourRow(
-                      hour: hour,
-                      numberOfCourts: numberOfCourts,
-                      tokens: tokens,
-                      spec: spec,
-                      slotBuilder: slotBuilder,
+            child: spec.fitAllHours
+                ? Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        spec.courtHeaderPadding.left,
+                        0,
+                        spec.courtHeaderPadding.right,
+                        spec.bannerInset),
+                    child: Column(
+                      children: [
+                        for (final hour in kHours) ...[
+                          if (nowHour != null && hour == nowHour! + 1)
+                            _NowDivider(tokens: tokens, nowHour: nowHour!),
+                          Expanded(
+                            child: _HourRow(
+                              hour: hour,
+                              numberOfCourts: numberOfCourts,
+                              tokens: tokens,
+                              spec: spec,
+                              slotBuilder: slotBuilder,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                );
-              },
-            ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.fromLTRB(
+                        spec.courtHeaderPadding.left,
+                        0,
+                        spec.courtHeaderPadding.right,
+                        12),
+                    itemCount: kHours.length,
+                    itemBuilder: (ctx, i) {
+                      final hour = kHours[i];
+                      final showNow = nowHour != null && hour == nowHour! + 1;
+                      return Column(
+                        children: [
+                          if (showNow)
+                            _NowDivider(tokens: tokens, nowHour: nowHour!),
+                          _HourRow(
+                            hour: hour,
+                            numberOfCourts: numberOfCourts,
+                            tokens: tokens,
+                            spec: spec,
+                            slotBuilder: slotBuilder,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ],
       ),

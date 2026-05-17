@@ -469,11 +469,14 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
                   SegmentedButton<BookingDensity>(
                     segments: const [
                       ButtonSegment(
+                          value: BookingDensity.compact, label: Text('כל היום')),
+                      ButtonSegment(
                           value: BookingDensity.young, label: Text('רגיל')),
                       ButtonSegment(
                           value: BookingDensity.senior, label: Text('מוגדל')),
                     ],
                     selected: {_density},
+                    showSelectedIcon: false,
                     onSelectionChanged: (s) {
                       if (s.isNotEmpty) _setDensityPreference(s.first);
                     },

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-enum BookingDensity { young, senior }
+enum BookingDensity { young, senior, compact }
 
 BookingDensity bookingDensityFromString(String? raw) {
   if (raw == 'senior') return BookingDensity.senior;
+  if (raw == 'compact') return BookingDensity.compact;
   return BookingDensity.young;
 }
 
@@ -106,6 +107,10 @@ class BookingDensitySpec {
   final double sheetButtonFontSize;
   final double sheetButtonMinHeight;
 
+  // Layout strategy: when true, TimeGrid auto-distributes vertical space
+  // across all 15 hour rows so the whole day fits without scrolling.
+  final bool fitAllHours;
+
   const BookingDensitySpec({
     required this.heroMinHeight,
     required this.heroPadding,
@@ -192,6 +197,7 @@ class BookingDensitySpec {
     required this.sheetButtonRadius,
     required this.sheetButtonFontSize,
     required this.sheetButtonMinHeight,
+    this.fitAllHours = false,
   });
 
   static const BookingDensitySpec young = BookingDensitySpec(
@@ -370,11 +376,110 @@ class BookingDensitySpec {
     sheetButtonMinHeight: 58,
   );
 
+  // Compact: shrinks slot rows so all 15 hours fit on screen without
+  // scrolling. Hero and recents sized similar to young; the slot grid
+  // distributes available vertical space across its rows.
+  static const BookingDensitySpec compact = BookingDensitySpec(
+    heroMinHeight: 36,
+    heroPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+    heroGap: 7,
+    dayToggleFontSize: 12,
+    dayToggleFontWeight: FontWeight.w700,
+    dayBtnPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+    dayBtnMinHeight: 26,
+    dayToggleOuterRadius: 7,
+    dayToggleInnerPadding: 2,
+    capFontSize: 10,
+    capFontWeight: FontWeight.w700,
+    pipDiameter: 5,
+    pipGap: 3,
+    capPipGap: 4,
+    iconBtnSize: 26,
+    iconBtnRadius: 7,
+    iconBtnGlyphSize: 13,
+    recentsPadding: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+    recentsGap: 5,
+    recentsLeadingFontSize: 10,
+    chipPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 9),
+    chipRadius: 7,
+    chipFontSize: 12,
+    chipMinHeight: 28,
+    chipFontSizeActive: 13,
+    chipPaddingActive: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+    avatarSize: 18,
+    avatarRadius: 5,
+    avatarFontSize: 10,
+    avatarLabelGap: 5,
+    onlineDotSize: 5,
+    onlineDotGap: 5,
+    addChipSize: 28,
+    addChipBorderWidth: 1.5,
+    addChipGlyphSize: 15,
+    hourColumnWidth: 28,
+    gridGap: 4,
+    courtHeaderPadding: EdgeInsets.fromLTRB(10, 4, 10, 2),
+    courtHeaderFontSize: 10,
+    courtHeaderLetterSpacing: 0.6,
+    gridRowMargin: EdgeInsets.only(bottom: 2),
+    hourLabelFontSize: 12,
+    slotMinHeight: 1, // Expanded rows distribute height; min just prevents 0
+    slotRadius: 7,
+    slotPadding: EdgeInsets.symmetric(vertical: 2, horizontal: 6),
+    slotFontSize: 12,
+    slotFontWeight: FontWeight.w700,
+    slotTakenFontSize: 11,
+    slotMinePrimaryFontSize: 11,
+    slotMineSecondaryFontSize: 9,
+    slotMineGap: 0,
+    slotPreviewPrimaryFontSize: 12,
+    slotPreviewSecondaryFontSize: 9,
+    slotPreviewBorderWidth: 1.5,
+    slotPreviewPulseMaxSpread: 4,
+    slotFreeBorderWidth: 1.5,
+    slotMineBorderWidth: 1.5,
+    slotPastBorderWidth: 1.5,
+    slotPastFontSize: 11,
+    bannerInset: 10,
+    bannerBorderWidth: 2,
+    bannerRadius: 12,
+    bannerPadding: EdgeInsets.symmetric(vertical: 9, horizontal: 11),
+    bannerInfoGap: 8,
+    bannerAvatarSize: 32,
+    bannerAvatarRadius: 9,
+    bannerAvatarFontSize: 13,
+    bannerLabelFontSize: 9,
+    bannerTitleFontSize: 13,
+    bannerButtonGap: 7,
+    bannerConfirmPadding: EdgeInsets.all(9),
+    bannerConfirmRadius: 9,
+    bannerConfirmFontSize: 13,
+    bannerConfirmMinHeight: 40,
+    bannerCancelPadding: EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+    bannerCancelBorderWidth: 1.5,
+    bannerCancelLabel: 'בטל',
+    sheetCardPadding: EdgeInsets.all(16),
+    sheetCardRadius: 18,
+    sheetTitleFontSize: 16,
+    sheetSubFontSize: 12,
+    sheetSubBottomMargin: 12,
+    sheetButtonRadius: 10,
+    sheetButtonFontSize: 14,
+    sheetButtonMinHeight: 44,
+    fitAllHours: true,
+  );
+
   static BookingDensitySpec of(BuildContext context) {
     final scope =
         context.dependOnInheritedWidgetOfExactType<BookingDensityScope>();
     if (scope == null) return young;
-    return scope.density == BookingDensity.senior ? senior : young;
+    switch (scope.density) {
+      case BookingDensity.senior:
+        return senior;
+      case BookingDensity.compact:
+        return compact;
+      case BookingDensity.young:
+        return young;
+    }
   }
 
   static BookingDensity densityOf(BuildContext context) {
