@@ -181,14 +181,10 @@ class _HourRow extends StatelessWidget {
       decoration: busy
           ? BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  tokens.clay.withOpacity(0.0),
-                  tokens.clay.withOpacity(0.05),
-                  tokens.clay.withOpacity(0.10),
-                ],
+              color: tokens.clay.withOpacity(0.09),
+              border: Border.all(
+                color: tokens.clay.withOpacity(0.35),
+                width: 1,
               ),
             )
           : null,
