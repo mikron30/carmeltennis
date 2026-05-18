@@ -496,6 +496,19 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
           kind: ToastKind.warn);
       return false;
     }
+    if (!widget.isManager) {
+      if (_partnerHasReservationOnSelectedDay(myName)) {
+        _toast.show(context, 'משתמש $myName כבר מוזמן',
+            kind: ToastKind.warn);
+        return false;
+      }
+      if (_partnerHasReservationOnSelectedDay(partner)) {
+        final partnerDisplay = _displayPartner(partner);
+        _toast.show(context, 'משתמש $partnerDisplay כבר מוזמן',
+            kind: ToastKind.warn);
+        return false;
+      }
+    }
     return true;
   }
 
