@@ -230,9 +230,7 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
             ),
             SizedBox(height: spec.slotMineGap),
             Text(
-              widget.state == SlotState.mineLocked
-                  ? 'עם ${secondary ?? ''} 🔒'
-                  : 'עם ${secondary ?? ''}',
+              'עם ${secondary ?? ''}',
               style: TextStyle(
                 color: color.withOpacity(0.88),
                 fontSize: spec.slotMineSecondaryFontSize,

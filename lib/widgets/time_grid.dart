@@ -210,11 +210,7 @@ class _HourRow extends StatelessWidget {
       decoration: busy
           ? BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              color: tokens.clay.withOpacity(0.09),
-              border: Border.all(
-                color: tokens.clay.withOpacity(0.35),
-                width: 1,
-              ),
+              color: tokens.clay.withOpacity(0.12),
             )
           : null,
       child: IntrinsicHeight(
