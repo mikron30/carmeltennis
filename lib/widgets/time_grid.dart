@@ -92,11 +92,7 @@ class TimeGrid extends StatelessWidget {
           Expanded(
             child: spec.fitAllHours
                 ? Padding(
-                    padding: EdgeInsets.fromLTRB(
-                        spec.courtHeaderPadding.left,
-                        0,
-                        spec.courtHeaderPadding.right,
-                        spec.bannerInset),
+                    padding: EdgeInsets.only(bottom: spec.bannerInset),
                     child: Column(
                       children: [
                         for (final hour in kHours) ...[
@@ -116,11 +112,7 @@ class TimeGrid extends StatelessWidget {
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.fromLTRB(
-                        spec.courtHeaderPadding.left,
-                        0,
-                        spec.courtHeaderPadding.right,
-                        12),
+                    padding: const EdgeInsets.only(bottom: 12),
                     itemCount: kHours.length,
                     itemBuilder: (ctx, i) {
                       final hour = kHours[i];
@@ -209,10 +201,12 @@ class _HourRow extends StatelessWidget {
       margin: spec.gridRowMargin,
       decoration: busy
           ? BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
               color: tokens.clay.withOpacity(0.12),
             )
           : null,
+      padding: EdgeInsets.symmetric(
+        horizontal: spec.courtHeaderPadding.left,
+      ),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
