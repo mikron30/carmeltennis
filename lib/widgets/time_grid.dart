@@ -197,11 +197,12 @@ class _HourRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final busy = kBusyHours.contains(hour);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: spec.gridRowMargin,
       decoration: busy
           ? BoxDecoration(
-              color: tokens.clay.withOpacity(0.12),
+              color: tokens.clay.withOpacity(isDark ? 0.28 : 0.12),
             )
           : null,
       padding: EdgeInsets.symmetric(
