@@ -57,6 +57,7 @@ class BookingDensitySpec {
   final double courtHeaderLetterSpacing;
   final EdgeInsets gridRowMargin;
   final double hourLabelFontSize;
+  final double nowDividerFontSize;
 
   // Slot button
   final double slotMinHeight;
@@ -154,6 +155,7 @@ class BookingDensitySpec {
     required this.courtHeaderLetterSpacing,
     required this.gridRowMargin,
     required this.hourLabelFontSize,
+    required this.nowDividerFontSize,
     required this.slotMinHeight,
     required this.slotRadius,
     required this.slotPadding,
@@ -244,6 +246,7 @@ class BookingDensitySpec {
     courtHeaderLetterSpacing: 0.6,
     gridRowMargin: EdgeInsets.only(bottom: 5),
     hourLabelFontSize: 13,
+    nowDividerFontSize: 9.5,
     slotMinHeight: 42,
     slotRadius: 8,
     slotPadding: EdgeInsets.symmetric(vertical: 5, horizontal: 7),
@@ -332,6 +335,7 @@ class BookingDensitySpec {
     courtHeaderLetterSpacing: 1.12,
     gridRowMargin: EdgeInsets.only(bottom: 10),
     hourLabelFontSize: 18,
+    nowDividerFontSize: 15,
     slotMinHeight: 76,
     slotRadius: 14,
     slotPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -423,6 +427,7 @@ class BookingDensitySpec {
     courtHeaderLetterSpacing: 0.6,
     gridRowMargin: EdgeInsets.only(bottom: 2),
     hourLabelFontSize: 12,
+    nowDividerFontSize: 9.5,
     slotMinHeight: 1, // Expanded rows distribute height; min just prevents 0
     slotRadius: 7,
     slotPadding: EdgeInsets.symmetric(vertical: 2, horizontal: 6),

@@ -256,6 +256,7 @@ class _NowDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spec = BookingDensitySpec.of(context);
     final now = TimeOfDay.now();
     final label =
         '— עכשיו ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} —';
@@ -270,7 +271,7 @@ class _NowDivider extends StatelessWidget {
             label,
             style: TextStyle(
               color: tokens.clay,
-              fontSize: 9.5,
+              fontSize: spec.nowDividerFontSize,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.6,
             ),
