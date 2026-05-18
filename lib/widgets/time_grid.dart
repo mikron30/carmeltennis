@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../booking_density.dart';
 import '../booking_tokens.dart';
 import 'bouncing_ball_loader.dart';
 import '../booking_limits.dart';
@@ -58,6 +59,7 @@ class TimeGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
+    final spec = BookingDensitySpec.of(context);
     if (numberOfCourts <= 0) {
       return Expanded(
         child: Center(
@@ -75,7 +77,7 @@ class TimeGrid extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          _CourtHeader(numberOfCourts: numberOfCourts, tokens: tokens),
+          _CourtHeader(numberOfCourts: numberOfCourts, tokens: tokens, spec: spec),
           SizedBox(
             height: loading ? 22 : 2,
             child: loading
@@ -88,25 +90,48 @@ class TimeGrid extends StatelessWidget {
                 : null,
           ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              itemCount: kHours.length,
-              itemBuilder: (ctx, i) {
-                final hour = kHours[i];
-                final showNow = nowHour != null && hour == nowHour! + 1;
-                return Column(
-                  children: [
-                    if (showNow) _NowDivider(tokens: tokens, nowHour: nowHour!),
-                    _HourRow(
-                      hour: hour,
-                      numberOfCourts: numberOfCourts,
-                      tokens: tokens,
-                      slotBuilder: slotBuilder,
+            child: spec.fitAllHours
+                ? Padding(
+                    padding: EdgeInsets.only(bottom: spec.bannerInset),
+                    child: Column(
+                      children: [
+                        for (final hour in kHours) ...[
+                          if (nowHour != null && hour == nowHour! + 1)
+                            _NowDivider(tokens: tokens, nowHour: nowHour!),
+                          Expanded(
+                            child: _HourRow(
+                              hour: hour,
+                              numberOfCourts: numberOfCourts,
+                              tokens: tokens,
+                              spec: spec,
+                              slotBuilder: slotBuilder,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                );
-              },
-            ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    itemCount: kHours.length,
+                    itemBuilder: (ctx, i) {
+                      final hour = kHours[i];
+                      final showNow = nowHour != null && hour == nowHour! + 1;
+                      return Column(
+                        children: [
+                          if (showNow)
+                            _NowDivider(tokens: tokens, nowHour: nowHour!),
+                          _HourRow(
+                            hour: hour,
+                            numberOfCourts: numberOfCourts,
+                            tokens: tokens,
+                            spec: spec,
+                            slotBuilder: slotBuilder,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -117,16 +142,21 @@ class TimeGrid extends StatelessWidget {
 class _CourtHeader extends StatelessWidget {
   final int numberOfCourts;
   final BookingTokens tokens;
-  const _CourtHeader({required this.numberOfCourts, required this.tokens});
+  final BookingDensitySpec spec;
+  const _CourtHeader({
+    required this.numberOfCourts,
+    required this.tokens,
+    required this.spec,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: tokens.bg,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: spec.courtHeaderPadding,
       child: Row(
         children: [
-          const SizedBox(width: 36),
+          SizedBox(width: spec.hourColumnWidth),
           for (int i = 0; i < numberOfCourts; i++) ...[
             Expanded(
               child: Center(
@@ -134,14 +164,14 @@ class _CourtHeader extends StatelessWidget {
                   'מגרש ${i + 1}',
                   style: TextStyle(
                     color: tokens.ink,
-                    fontSize: 10,
+                    fontSize: spec.courtHeaderFontSize,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
+                    letterSpacing: spec.courtHeaderLetterSpacing,
                   ),
                 ),
               ),
             ),
-            if (i < numberOfCourts - 1) const SizedBox(width: 5),
+            if (i < numberOfCourts - 1) SizedBox(width: spec.gridGap),
           ],
         ],
       ),
@@ -153,55 +183,48 @@ class _HourRow extends StatelessWidget {
   final int hour;
   final int numberOfCourts;
   final BookingTokens tokens;
+  final BookingDensitySpec spec;
   final SlotBuilder slotBuilder;
 
   const _HourRow({
     required this.hour,
     required this.numberOfCourts,
     required this.tokens,
+    required this.spec,
     required this.slotBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
     final busy = kBusyHours.contains(hour);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: spec.gridRowMargin,
       decoration: busy
           ? BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  tokens.clay.withOpacity(0.0),
-                  tokens.clay.withOpacity(0.05),
-                  tokens.clay.withOpacity(0.10),
-                ],
-              ),
+              color: tokens.clay.withOpacity(isDark ? 0.28 : 0.12),
             )
           : null,
+      padding: EdgeInsets.symmetric(
+        horizontal: spec.courtHeaderPadding.left,
+      ),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
-              width: 36,
-              child: Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      hour.toString().padLeft(2, '0'),
-                      style: TextStyle(
-                        color: tokens.ink2,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        height: 1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ],
+              width: spec.hourColumnWidth,
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  hour.toString().padLeft(2, '0'),
+                  style: TextStyle(
+                    color: tokens.ink,
+                    fontSize: spec.hourLabelFontSize,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ),
@@ -217,7 +240,7 @@ class _HourRow extends StatelessWidget {
                   );
                 }),
               ),
-              if (i < numberOfCourts - 1) const SizedBox(width: 5),
+              if (i < numberOfCourts - 1) SizedBox(width: spec.gridGap),
             ],
           ],
         ),
@@ -233,6 +256,7 @@ class _NowDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spec = BookingDensitySpec.of(context);
     final now = TimeOfDay.now();
     final label =
         '— עכשיו ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} —';
@@ -247,7 +271,7 @@ class _NowDivider extends StatelessWidget {
             label,
             style: TextStyle(
               color: tokens.clay,
-              fontSize: 9.5,
+              fontSize: spec.nowDividerFontSize,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.6,
             ),

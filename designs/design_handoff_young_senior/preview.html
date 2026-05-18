@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Carmel Tennis — Young + Senior variants</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#1a1a1a;font-family:"Heebo",system-ui,sans-serif;min-height:100vh}
+  .stage{padding:32px;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .section{width:100%;max-width:1640px}
+  .title{color:#f0e3d4;font-weight:800;font-size:20px;margin:0 0 4px;letter-spacing:-0.01em}
+  .sub{color:#a89888;font-size:13px;margin:0 0 18px;line-height:1.5}
+  .row{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+  .card{display:flex;flex-direction:column;gap:8px}
+  .card .lbl{color:#a89888;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;text-align:center}
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="variant-young.jsx"></script>
+<script type="text/babel" src="variant-senior.jsx"></script>
+
+<script type="text/babel">
+  function App() {
+    return (
+      <div className="stage">
+        <div className="section">
+          <h2 className="title">YOUNG — compact (14px slot text, 48px slots, 13px chips)</h2>
+          <p className="sub">Higher information density. For users comfortable with small type and quick taps.</p>
+          <div className="row">
+            <div className="card"><span className="lbl">Light</span><VariantYoung initialTheme="light" /></div>
+            <div className="card"><span className="lbl">Dark</span><VariantYoung initialTheme="dark" /></div>
+          </div>
+        </div>
+        <div className="section">
+          <h2 className="title">SENIOR — comfortable (20px slot text, 76px slots, 18-19px chips, ≥44px tap targets)</h2>
+          <p className="sub">Larger type and tap targets. Same flow and structure — just sized for older users.</p>
+          <div className="row">
+            <div className="card"><span className="lbl">Light</span><VariantSenior initialTheme="light" /></div>
+            <div className="card"><span className="lbl">Dark</span><VariantSenior initialTheme="dark" /></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

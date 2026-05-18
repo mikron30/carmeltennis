@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart'
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'booking_density.dart';
 import 'booking_screen_v31.dart';
 import 'booking_tokens.dart';
 import 'src/authentication.dart';
@@ -33,6 +34,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
   // New variable for email notifications preference
   bool _receiveEmails = false;
   bool _darkMode = false; // persisted user pref (default false)
+  BookingDensity _density = BookingDensity.young;
   late final StreamSubscription<User?> _authSub;
   late final StreamSubscription<User?> _idTokSub;
   @override
@@ -51,6 +53,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
           lastSelectedPartners = [];
           _receiveEmails = false; // local state cleared
           _darkMode = false;
+          _density = BookingDensity.young;
         });
         return;
       }
@@ -113,16 +116,19 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
 
     bool receive = false;
     bool dark = false;
+    BookingDensity density = BookingDensity.young;
 
     if (q.docs.isNotEmpty) {
       final data = q.docs.first.data() as Map<String, dynamic>;
       receive = (data['receiveReservationEmails'] ?? false) as bool;
       dark = (data['darkMode'] ?? false) as bool;
+      density = bookingDensityFromString(data['bookingDensity'] as String?);
     }
 
     setState(() {
       _receiveEmails = receive;
       _darkMode = dark;
+      _density = density;
     });
 
     // Apply the theme AFTER this frame to avoid rebuild assertions
@@ -269,15 +275,18 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     // 3) Logged in and resolved → normal UI
     return Scaffold(
       endDrawer: _buildDrawer(),
-      body: Builder(
-        builder: (scaffoldCtx) => BookingScreenV31(
-          isManager: isManager,
-          myUserName: myUserName,
-          lastFivePartners: lastSelectedPartners,
-          allUsers: suggestionsList,
-          darkMode: _darkMode,
-          onDarkModeToggle: _setDarkPreference,
-          onMenuTap: () => Scaffold.of(scaffoldCtx).openEndDrawer(),
+      body: BookingDensityScope(
+        density: _density,
+        child: Builder(
+          builder: (scaffoldCtx) => BookingScreenV31(
+            isManager: isManager,
+            myUserName: myUserName,
+            lastFivePartners: lastSelectedPartners,
+            allUsers: suggestionsList,
+            darkMode: _darkMode,
+            onDarkModeToggle: _setDarkPreference,
+            onMenuTap: () => Scaffold.of(scaffoldCtx).openEndDrawer(),
+          ),
         ),
       ),
     );
@@ -372,6 +381,22 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _setDensityPreference(BookingDensity newValue) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final email = user.email!;
+    final users = FirebaseFirestore.instance.collection('users_2024');
+    final q = await users.where('מייל', isEqualTo: email).limit(1).get();
+
+    if (q.docs.isNotEmpty) {
+      await users.doc(q.docs.first.id).update({'bookingDensity': newValue.name});
+    }
+
+    if (!mounted) return;
+    setState(() => _density = newValue);
+  }
+
   Widget _themedTile(BuildContext context, Widget child) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
@@ -423,6 +448,41 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
               onChanged: (bool? v) {
                 if (v != null) _toggleEmailPreference(v);
               },
+            ),
+          ),
+
+          // Booking density (text + button size)
+          _themedTile(
+            context,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'גודל טקסט וכפתורים',
+                      style: titleStyle,
+                    ),
+                  ),
+                  SegmentedButton<BookingDensity>(
+                    segments: const [
+                      ButtonSegment(
+                          value: BookingDensity.compact, label: Text('כל היום')),
+                      ButtonSegment(
+                          value: BookingDensity.young, label: Text('רגיל')),
+                      ButtonSegment(
+                          value: BookingDensity.senior, label: Text('מוגדל')),
+                    ],
+                    selected: {_density},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (s) {
+                      if (s.isNotEmpty) _setDensityPreference(s.first);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
 // Sign out
