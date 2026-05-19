@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; // For date formatting
+import 'holiday_courts.dart' show clearHolidayCache;
 
 class AddHolidayScreen extends StatefulWidget {
   @override
@@ -62,6 +63,7 @@ class _AddHolidayScreenState extends State<AddHolidayScreen> {
       });
       // Optionally show a confirmation message or handle errors
     }
+    clearHolidayCache();
     // Refresh the list of holidays after add/delete operation
     fetchHolidays();
   }

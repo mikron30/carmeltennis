@@ -8,19 +8,28 @@ class UserManager {
   Map<String, String>? _emailToUsernameMap;
   Map<String, String>? _usernameToEmailMap;
 
-  bool _isFetching = false;
+  // Single shared Future so concurrent callers (e.g. cold-start unawaited
+  // prefetch + first booking attempt) await the same fetch instead of either
+  // racing to refetch or silently reading half-populated maps.
+  Future<void>? _inFlight;
 
   UserManager._internal();
 
   static UserManager get instance => _instance;
 
-  Future<void> fetchAndStoreUserMappings() async {
-    if (_isFetching) return; // Prevent multiple simultaneous fetches
-    _isFetching = true;
+  Future<void> fetchAndStoreUserMappings() {
+    final existing = _inFlight;
+    if (existing != null) return existing;
+    final future = _fetch();
+    _inFlight = future;
+    return future;
+  }
+
+  Future<void> _fetch() async {
     try {
       final querySnapshot = await _firestore.collection('users_2024').get();
-      var tempEmailToName = <String, String>{};
-      var tempNameToEmail = <String, String>{};
+      final tempEmailToName = <String, String>{};
+      final tempNameToEmail = <String, String>{};
 
       for (var doc in querySnapshot.docs) {
         final data = doc.data();
@@ -37,19 +46,17 @@ class UserManager {
         tempNameToEmail[fullName] = email;
       }
 
-      // Assign to the class fields once done
       _emailToUsernameMap = tempEmailToName;
       _usernameToEmailMap = tempNameToEmail;
     } catch (e) {
       print("Error fetching user mappings: $e");
     } finally {
-      _isFetching = false;
+      _inFlight = null;
     }
   }
 
   Future<String?> getUsernameByEmail(String email) async {
-    // If map is null or empty, fetch from Firestore
-    if (_emailToUsernameMap == null || _emailToUsernameMap!.isEmpty) {
+    if (_emailToUsernameMap == null || _inFlight != null) {
       await fetchAndStoreUserMappings();
     }
     return _emailToUsernameMap?[email];
@@ -57,7 +64,7 @@ class UserManager {
 
   /// NEW: Get the email by a user's full name (assuming 'שם פרטי שם משפחה').
   Future<String?> getEmailByUsername(String username) async {
-    if (_usernameToEmailMap == null || _usernameToEmailMap!.isEmpty) {
+    if (_usernameToEmailMap == null || _inFlight != null) {
       await fetchAndStoreUserMappings();
     }
     return _usernameToEmailMap?[username];
