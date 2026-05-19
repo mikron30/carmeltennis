@@ -61,6 +61,10 @@ app.*.map.json
 # Firebase service account key
 potent-howl-228108-firebase-adminsdk-44p85-c5ad0e67dd.json
 
+# User PII — never commit (still present in git history; scrub separately)
+carmel_users_2024.txt
+carmel_users_2024.xlsx
+
 # Claude Code
 .claude/
 
