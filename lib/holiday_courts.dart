@@ -1,18 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+// Session-scoped cache keyed by 'yyyy-MM-dd'. Holiday docs change rarely and
+// the admin editor calls [clearHolidayCache] after writing, so within-session
+// edits show up on the next day-switch. A page reload clears it.
+final Map<String, String> _holidayTypeCache = {};
+
 /// Looks up the `holidays/<yyyy-MM-dd>` doc and returns the `holidayType` field
 /// (e.g. 'חג', 'ערב חג', 'מגרש אחד', 'אין מגרשים') or 'רגיל' if no override exists.
 Future<String> getHolidayType(DateTime date) async {
   final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+  final cached = _holidayTypeCache[formattedDate];
+  if (cached != null) return cached;
   final docSnapshot = await FirebaseFirestore.instance
       .collection('holidays')
       .doc(formattedDate)
       .get();
-  if (docSnapshot.exists) {
-    return docSnapshot['holidayType'] ?? 'חג';
-  }
-  return 'רגיל';
+  final type = docSnapshot.exists
+      ? ((docSnapshot['holidayType'] ?? 'חג') as String)
+      : 'רגיל';
+  _holidayTypeCache[formattedDate] = type;
+  return type;
+}
+
+/// Invalidate the session-scoped holiday-type cache. Call after editing or
+/// deleting a holiday doc so the booking screen re-fetches on the next visit.
+void clearHolidayCache() {
+  _holidayTypeCache.clear();
 }
 
 /// Resolves the number of bookable courts for a given date based on the
