@@ -224,7 +224,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       _selectedDate.day,
       hour,
     );
-    return reservationDt.difference(now).inMinutes < 30;
+    return reservationDt.difference(now).inMinutes < 180;
   }
 
   bool _isPast(int hour, DateTime now) {
@@ -428,7 +428,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
           widget.myUserName != null && reservation.involves(widget.myUserName!);
       if (mine) {
         if (!widget.isManager && _isLocked(hour, now)) {
-          _toast.show(context, 'לא ניתן לבטל פחות מ-30 דקות לפני',
+          _toast.show(context, 'לא ניתן לבטל פחות מ-3 שעות לפני',
               kind: ToastKind.warn);
           return;
         }
