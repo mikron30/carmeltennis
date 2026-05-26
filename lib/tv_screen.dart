@@ -273,10 +273,14 @@ class _TvDayBoardState extends State<_TvDayBoard> {
       return SlotData(state: SlotState.taken, primaryLabel: customLabel);
     }
 
+    final names = [
+      _displayName(reservation.userName),
+      _displayName(reservation.partner),
+    ].where((name) => name.isNotEmpty).join(' · ');
+
     return SlotData(
       state: SlotState.taken,
-      primaryLabel:
-          '${_displayName(reservation.userName)}\n${_displayName(reservation.partner)}',
+      primaryLabel: names,
     );
   }
 
