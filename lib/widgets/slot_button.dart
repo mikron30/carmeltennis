@@ -208,6 +208,8 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
   Widget _buildLabel(Color color, BookingDensitySpec spec) {
     final primary = widget.primaryLabel ?? '';
     final secondary = widget.secondaryLabel;
+    final primaryLines =
+        primary.split('\n').where((line) => line.trim().isNotEmpty).toList();
 
     switch (widget.state) {
       case SlotState.mine:
@@ -279,6 +281,28 @@ class _SlotButtonState extends State<SlotButton> with TickerProviderStateMixin {
         );
 
       case SlotState.taken:
+        if (primaryLines.length > 1) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final line in primaryLines.take(2))
+                Text(
+                  line,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: spec.slotTakenFontSize,
+                    fontWeight: FontWeight.w700,
+                    height: 1.12,
+                  ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+            ],
+          );
+        }
+
         return Text(
           primary,
           style: TextStyle(
