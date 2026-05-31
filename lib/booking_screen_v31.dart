@@ -512,6 +512,11 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   Future<void> _commitBooking(int courtUiIndex, int hour) async {
     final user = FirebaseAuth.instance.currentUser!;
     final myName = widget.myUserName!;
+    // Snapshot the day up front. _selectedDate is mutable and the day switchers
+    // (hero strip / date picker) stay live during the booking's async window, so
+    // re-reading the field after the awaits below could let the stored row and
+    // the confirmation email disagree on the date.
+    final bookingDate = _selectedDate;
     final partner = _selectedPartner?.trim() ?? '';
     if (!_hasPartnerForBooking(partner)) {
       throw _BookingValidationError('בחר/י שותפ.ה לפני ההזמנה');
@@ -520,8 +525,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     if (!widget.isManager) {
       final results = await Future.wait([
-        _resManager.hasExistingReservation(myName, _selectedDate),
-        _resManager.hasExistingReservation(partner, _selectedDate),
+        _resManager.hasExistingReservation(myName, bookingDate),
+        _resManager.hasExistingReservation(partner, bookingDate),
       ]);
       if (results[0] || results[1]) {
         final blocking = results[0] ? myName : partner;
@@ -531,8 +536,8 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     if (!widget.isManager && isEveningQuotaHour(hour)) {
       final counts = await Future.wait([
-        _resManager.countWeeklyEveningReservations(myName, _selectedDate),
-        _resManager.countWeeklyEveningReservations(partner, _selectedDate),
+        _resManager.countWeeklyEveningReservations(myName, bookingDate),
+        _resManager.countWeeklyEveningReservations(partner, bookingDate),
       ]);
       if (counts[0] >= kWeeklyEveningQuota ||
           counts[1] >= kWeeklyEveningQuota) {
@@ -544,7 +549,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     }
 
     final dbCourtNumber = _numberOfCourts - courtUiIndex;
-    final formattedDate = _fmt(_selectedDate);
+    final formattedDate = _fmt(bookingDate);
     final reservationData = {
       'date': formattedDate,
       'courtNumber': dbCourtNumber,
@@ -597,7 +602,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       partnerName: partnerDisplayName,
       partnerWantsEmail: prefs[1],
       courtNumber: dbCourtNumber,
-      date: _selectedDate,
+      date: bookingDate,
       hour: hour,
       isCancellation: false,
     );
@@ -626,7 +631,9 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       partnerName: partnerName,
       partnerWantsEmail: prefs[1],
       courtNumber: r.courtNumber,
-      date: _selectedDate,
+      // Use the cancelled row's own stored date, not the live _selectedDate —
+      // the latter can change mid-flight and would mis-report the cancellation.
+      date: DateTime.parse(r.date),
       hour: r.hour,
       isCancellation: true,
     );
