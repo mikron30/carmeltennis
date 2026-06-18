@@ -512,11 +512,21 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   Future<void> _commitBooking(int courtUiIndex, int hour) async {
     final user = FirebaseAuth.instance.currentUser!;
     final myName = widget.myUserName!;
-    // Snapshot the day up front. _selectedDate is mutable and the day switchers
-    // (hero strip / date picker) stay live during the booking's async window, so
-    // re-reading the field after the awaits below could let the stored row and
-    // the confirmation email disagree on the date.
+    // Snapshot the day AND its court count up front. _selectedDate and
+    // _numberOfCourts are mutable and the day switchers (hero strip / date
+    // picker) stay live during the booking's async window. courtUiIndex was
+    // captured at tap time against the then-current court count, so re-reading
+    // _numberOfCourts after the awaits below could yield a stale-vs-live mix —
+    // e.g. switching from a 3-court day to a 2-court day mid-commit made
+    // (newCount - oldIndex) underflow to court 0 (seen on evening bookings,
+    // whose extra quota await widens the window).
     final bookingDate = _selectedDate;
+    final dbCourtNumber = _numberOfCourts - courtUiIndex;
+    if (dbCourtNumber < 1 || dbCourtNumber > _numberOfCourts) {
+      // The day changed under us; the tapped cell no longer maps to a real
+      // court. Bail instead of writing/emailing an invalid court number.
+      throw _BookingValidationError('המגרש כבר לא זמין — נסה שוב');
+    }
     final partner = _selectedPartner?.trim() ?? '';
     if (!_hasPartnerForBooking(partner)) {
       throw _BookingValidationError('בחר/י שותפ.ה לפני ההזמנה');
@@ -548,7 +558,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       }
     }
 
-    final dbCourtNumber = _numberOfCourts - courtUiIndex;
     final formattedDate = _fmt(bookingDate);
     final reservationData = {
       'date': formattedDate,
