@@ -119,7 +119,7 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
     BookingDensity density = BookingDensity.young;
 
     if (q.docs.isNotEmpty) {
-      final data = q.docs.first.data() as Map<String, dynamic>;
+      final data = q.docs.first.data();
       receive = (data['receiveReservationEmails'] ?? false) as bool;
       dark = (data['darkMode'] ?? false) as bool;
       density = bookingDensityFromString(data['bookingDensity'] as String?);
