@@ -620,6 +620,21 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   Future<void> _cancelReservation(_Reservation r) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Authoritative removal FIRST — mirror _commitBooking, which writes to
+    // Firestore before it emails. sendReservationEmails swallows every send
+    // error and never throws, so emailing first means a failed delete still
+    // sends a cancellation notice for a booking that's alive and served to
+    // everyone else (the reported bug). deleteReservationCell sweeps the whole
+    // cell (not just r.docId) so a legacy duplicate can't survive. If it
+    // throws, _openCancelSheet's catch reverts the optimistic UI — no email.
+    await _resManager.deleteReservationCell(
+      date: r.date,
+      courtNumber: r.courtNumber,
+      hour: r.hour,
+    );
+
+    // Slot is actually free now — safe to notify.
     final rawPartnerName =
         (r.userName == widget.myUserName) ? r.partner : r.userName;
     final partnerName = _displayPartner(rawPartnerName);
@@ -646,10 +661,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       hour: r.hour,
       isCancellation: true,
     );
-    await FirebaseFirestore.instance
-        .collection('reservations')
-        .doc(r.docId)
-        .delete();
   }
 
   Future<bool> _doesUserWantEmails(String email) async {
