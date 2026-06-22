@@ -65,7 +65,10 @@ class ReservationManager {
 
     final startKey = bookingDateKey(startOfBookingWeek(date));
     final endKey = bookingDateKey(endOfBookingWeek(date));
-    final countedDocIds = <String>{};
+    // Dedup by cell (date_court_hour), not doc.id: a legacy timestamp-id doc and
+    // the deterministic doc can both occupy one slot with different ids, and
+    // counting both would over-count the quota and wrongly block a booking.
+    final countedCells = <String>{};
 
     final snapshots = await Future.wait([
       _firestore
@@ -87,12 +90,12 @@ class ReservationManager {
         final inWeek = dateValue.compareTo(startKey) >= 0 &&
             dateValue.compareTo(endKey) <= 0;
         if (inWeek && isEveningQuotaHour(hour)) {
-          countedDocIds.add(doc.id);
+          countedCells.add('${dateValue}_${data['courtNumber']}_$hour');
         }
       }
     }
 
-    return countedDocIds.length;
+    return countedCells.length;
   }
 
   int? _readHour(Object? value) {
