@@ -48,7 +48,6 @@ dependencies:
   firebase_ui_localizations: ^2.0.1
   shared_preferences: ^2.0.6
   intl: 0.20.2
-  mailer: ^7.1.0
   dio: ^5.4.3
   
 dev_dependencies:
