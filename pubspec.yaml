@@ -43,6 +43,7 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
   cloud_firestore: ^6.3.0
+  cloud_functions: ^6.3.3
   provider: ^6.0.5
   firebase_ui_auth: ^3.0.1
   firebase_ui_localizations: ^2.0.1
