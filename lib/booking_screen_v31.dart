@@ -61,6 +61,11 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   String? _pendingKey;
   String? _failedKey;
   bool _loadingDay = false;
+  // _pendingKey only greys out the cell that was tapped, so it never stopped a
+  // second tap on a *different* free cell from starting its own commit while
+  // the first was still in its ~1s network window — both then passed the
+  // one-booking-per-day pre-check. This blocks that at the source.
+  bool _committing = false;
 
   final _toast = ToastController();
   final _resManager = ReservationManager();
@@ -181,11 +186,15 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
+      // Dedup by cell, not doc.id — same reason as
+      // ReservationManager.countWeeklyEveningReservations: a legacy
+      // timestamp-id doc and the deterministic doc can both sit on one slot,
+      // and counting both shows the user a wrong "ערב x/3" in the header.
       final counted = <String>{};
       for (final doc in snap.docs) {
         final r = _Reservation.fromDoc(doc);
         if (isEveningQuotaHour(r.hour) && r.involves(me)) {
-          counted.add(r.docId);
+          counted.add(reservationCellId(r.date, r.courtNumber, r.hour));
         }
       }
       setState(() => _myWeeklyEveningCount = counted.length);
@@ -444,6 +453,9 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
     if (_isPast(hour, now) && !widget.isManager) return;
 
+    // One booking commit in flight at a time.
+    if (_committing) return;
+
     if (!_validateSync()) return;
 
     await _commit(courtUiIndex, hour);
@@ -451,13 +463,20 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
 
   Future<void> _commit(int courtUiIndex, int hour) async {
     final key = '$courtUiIndex-$hour';
-    setState(() => _pendingKey = key);
+    setState(() {
+      _pendingKey = key;
+      _committing = true;
+    });
     try {
       await _commitBooking(courtUiIndex, hour);
       if (!mounted) return;
       setState(() => _pendingKey = null);
       _toast.show(context, 'הוזמן', kind: ToastKind.good);
     } on _BookingValidationError catch (e) {
+      if (!mounted) return;
+      setState(() => _pendingKey = null);
+      _toast.show(context, e.message, kind: ToastKind.warn);
+    } on BookingConflict catch (e) {
       if (!mounted) return;
       setState(() => _pendingKey = null);
       _toast.show(context, e.message, kind: ToastKind.warn);
@@ -472,6 +491,10 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
         if (!mounted) return;
         setState(() => _failedKey = null);
       });
+    } finally {
+      // Plain assignment, not setState: every branch above already rebuilt, and
+      // the early `if (!mounted) return`s must not leave the guard stuck on.
+      _committing = false;
     }
   }
 
@@ -544,36 +567,30 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       }
     }
 
+    Map<String, Set<String>> eveningBaseline = const {};
     if (!widget.isManager && isEveningQuotaHour(hour)) {
-      final counts = await Future.wait([
-        _resManager.countWeeklyEveningReservations(myName, bookingDate),
-        _resManager.countWeeklyEveningReservations(partner, bookingDate),
+      final cells = await Future.wait([
+        _resManager.weeklyEveningCells(myName, bookingDate),
+        _resManager.weeklyEveningCells(partner, bookingDate),
       ]);
-      if (counts[0] >= kWeeklyEveningQuota ||
-          counts[1] >= kWeeklyEveningQuota) {
-        final blocking = counts[0] >= kWeeklyEveningQuota ? myName : partner;
+      if (cells[0].length >= kWeeklyEveningQuota ||
+          cells[1].length >= kWeeklyEveningQuota) {
+        final blocking =
+            cells[0].length >= kWeeklyEveningQuota ? myName : partner;
         throw _BookingValidationError(
           'ל-$blocking כבר יש 3 הזמנות השבוע בשעות 18:00, 19:00 ו-20:00',
         );
       }
+      // Handed to the transaction so the quota survives a cross-date race —
+      // this query alone is read-then-write, same hole as the day rule.
+      eveningBaseline = {myName: cells[0], partner: cells[1]};
     }
 
     final formattedDate = _fmt(bookingDate);
-    final reservationData = {
-      'date': formattedDate,
-      'courtNumber': dbCourtNumber,
-      'hour': hour,
-      'isReserved': true,
-      'userName': myName.trim(),
-      'partner': partner.trim(),
-    };
 
-    // Deterministic doc id locks one reservation per cell. Legacy docs use a
-    // timestamp id and collide on the same (date, court, hour) without sharing
-    // an id — a pre-check covers them until backfill normalizes the collection.
-    final docId = '${formattedDate}_${dbCourtNumber}_$hour';
-    final ref =
-        FirebaseFirestore.instance.collection('reservations').doc(docId);
+    // Legacy docs use a timestamp id, so they can occupy this cell without
+    // sharing the deterministic id the transaction below guards. A pre-check
+    // covers them until backfill normalizes the collection.
     final legacy = await FirebaseFirestore.instance
         .collection('reservations')
         .where('date', isEqualTo: formattedDate)
@@ -584,15 +601,26 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     if (legacy.docs.isNotEmpty) {
       throw _BookingValidationError('המשבצת נתפסה כרגע — נסה שוב');
     }
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      if (snap.exists) {
-        throw _BookingValidationError('המשבצת נתפסה כרגע — נסה שוב');
-      }
-      tx.set(ref, reservationData);
-    });
 
-    await _updateLastFivePartners(user.email!, partner.trim());
+    // Atomic: cell + both participants' day locks in one transaction. The
+    // hasExistingReservation check above is a read and cannot stop two
+    // overlapping commits landing on two different cells.
+    await _resManager.createReservation(
+      date: formattedDate,
+      courtNumber: dbCourtNumber,
+      hour: hour,
+      userName: myName,
+      partner: partner,
+      claimDayLocks: !widget.isManager,
+      eveningBaseline: eveningBaseline,
+    );
+
+    // Post-booking side effects only from here down. The reservation is
+    // committed — a bookkeeping failure must not bubble up and report the
+    // booking as failed (retrying would just hit "כבר מוזמן").
+    try {
+      await _updateLastFivePartners(user.email!, partner.trim());
+    } catch (_) {}
 
     final partnerEmail = partner.startsWith('!')
         ? null
@@ -635,24 +663,29 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     );
 
     // Slot is actually free now — safe to notify.
-    final rawPartnerName =
-        (r.userName == widget.myUserName) ? r.partner : r.userName;
-    final partnerName = _displayPartner(rawPartnerName);
-    final partnerEmail = rawPartnerName.startsWith('!')
-        ? null
-        : await UserManager.instance.getEmailByUsername(partnerName);
+    // Notify the reservation's OWN two participants, not "me and the other
+    // one": a manager cancelling a booking they aren't part of used to resolve
+    // the other side to r.userName and never told r.partner at all.
+    final aName = _displayPartner(r.userName);
+    final bName = _displayPartner(r.partner);
+    final emails = await Future.wait([
+      r.userName.startsWith('!')
+          ? Future.value(null)
+          : UserManager.instance.getEmailByUsername(aName),
+      r.partner.startsWith('!')
+          ? Future.value(null)
+          : UserManager.instance.getEmailByUsername(bName),
+    ]);
     final prefs = await Future.wait([
-      _doesUserWantEmails(user.email!),
-      partnerEmail != null
-          ? _doesUserWantEmails(partnerEmail)
-          : Future.value(false),
+      emails[0] != null ? _doesUserWantEmails(emails[0]!) : Future.value(false),
+      emails[1] != null ? _doesUserWantEmails(emails[1]!) : Future.value(false),
     ]);
     await sendReservationEmails(
-      originatorEmail: user.email!,
-      originatorName: widget.myUserName ?? '',
+      originatorEmail: emails[0] ?? user.email!,
+      originatorName: aName,
       originatorWantsEmail: prefs[0],
-      partnerEmail: partnerEmail,
-      partnerName: partnerName,
+      partnerEmail: emails[1],
+      partnerName: bName,
       partnerWantsEmail: prefs[1],
       courtNumber: r.courtNumber,
       // Use the cancelled row's own stored date, not the live _selectedDate —
