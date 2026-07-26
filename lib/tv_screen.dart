@@ -9,6 +9,7 @@ import 'package:intl/intl.dart' as intl;
 import 'booking_tokens.dart';
 import 'holiday_courts.dart';
 import 'israel_time.dart';
+import 'reservation_manager.dart';
 import 'widgets/slot_button.dart';
 import 'widgets/time_grid.dart';
 
@@ -420,11 +421,13 @@ class _TvReservation {
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data();
+    // Defensive parsing, not casts — see readIntField. A type-drifted doc
+    // thrown from here would blank the kiosk screen for the whole club.
     return _TvReservation(
-      courtNumber: (data['courtNumber'] ?? 0) as int,
-      hour: (data['hour'] ?? 0) as int,
-      userName: (data['userName'] ?? '') as String,
-      partner: (data['partner'] ?? '') as String,
+      courtNumber: readIntField(data['courtNumber']) ?? 0,
+      hour: readIntField(data['hour']) ?? 0,
+      userName: data['userName']?.toString() ?? '',
+      partner: data['partner']?.toString() ?? '',
     );
   }
 }

@@ -6,8 +6,9 @@ class BookingWindow {
   /// Israel local time. The returned [DateTime] uses Israel-wall-clock
   /// fields and is meant to be compared against [IsraelTime.now].
   static DateTime opensAt(DateTime targetDate) {
-    final d = DateTime(targetDate.year, targetDate.month, targetDate.day);
-    return d.subtract(const Duration(days: 2)).add(const Duration(hours: 22));
+    // Constructor day-arithmetic: Duration math shifts an hour across DST
+    // changes on the device timezone, wrongly closing the window around 22:00.
+    return DateTime(targetDate.year, targetDate.month, targetDate.day - 2, 22);
   }
 
   /// True if `now` is at or after the opening time for `targetDate`.
