@@ -26,6 +26,9 @@
       }
     }
   },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
     "public": "public",
     "ignore": [
