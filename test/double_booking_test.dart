@@ -102,6 +102,23 @@ void main() {
     await book(2, 10); // must not throw
   });
 
+  test('a stale lock pointing at someone else\'s booking is reclaimed',
+      () async {
+    // The way a member could get stuck for good: their booking is wiped
+    // outside the app (admin console / delete_all_reservations.py) so the lock
+    // survives, and the freed cell is then taken by somebody else. Checking
+    // only that the cell exists would bar them from that date forever.
+    await book(1, 7); // a+b hold cell 1_7, locks point at it
+    await fake
+        .collection('reservations')
+        .doc(reservationCellId(date, 1, 7))
+        .delete(); // external wipe — locks left behind
+    await book(1, 7, user: 'זר אחד', partner: 'זר שני'); // someone else takes it
+
+    await book(2, 10); // a+b must still be able to book — must not throw
+    expect((await fake.collection('reservations').get()).docs.length, 2);
+  });
+
   test('a stale lock pointing at the booked cell itself is reclaimed',
       () async {
     // Same external wipe, but the member rebooks the SAME slot the stale lock

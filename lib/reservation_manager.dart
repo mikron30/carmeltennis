@@ -14,11 +14,15 @@ class BookingConflict implements Exception {
 String reservationCellId(String date, int courtNumber, int hour) =>
     '${date}_${courtNumber}_$hour';
 
+/// Trimmed, case-folded name — the single way names are compared here, so a
+/// lock id and an ownership check can never disagree about who someone is.
+String _normName(Object? name) => (name?.toString() ?? '').trim().toLowerCase();
+
 /// Deterministic id for the "this user already has a booking on this date"
 /// lock. Matched case-insensitively/trimmed to mirror `_Reservation.involves`.
 /// Firestore ids may not contain '/'.
 String dayLockId(String date, String userName) =>
-    '${date}__${userName.trim().toLowerCase().replaceAll('/', '-')}';
+    '${date}__${_normName(userName).replaceAll('/', '-')}';
 
 /// A name that stands in for a person (so it can hold a day lock). Manager
 /// bookings store a free-text label prefixed with '!' — not a member.
@@ -87,11 +91,19 @@ class ReservationManager {
         if (heldCell is! String || heldCell == cellId) continue;
         // Self-heal: a lock whose reservation was removed outside the app
         // (admin console, delete_all_reservations.py) would otherwise bar
-        // that member from the date forever. Block only while the cell it
-        // points at is genuinely occupied.
+        // that member from the date forever. A lock only speaks for its owner
+        // while the cell it points at still has that owner on it — if the cell
+        // was wiped externally and then rebooked by somebody else, the lock is
+        // stale and must be reclaimed, not enforced. Checking existence alone
+        // would leave the member unable to book that date, permanently.
         final held =
             await tx.get(_firestore.collection('reservations').doc(heldCell));
         if (!held.exists) continue;
+        final heldData = held.data();
+        final owner = _normName(lockOwners[i]);
+        final stillOnIt = _normName(heldData?['userName']) == owner ||
+            _normName(heldData?['partner']) == owner;
+        if (!stillOnIt) continue;
         throw BookingConflict('משתמש ${lockOwners[i]} כבר מוזמן');
       }
       tx.set(ref, {
