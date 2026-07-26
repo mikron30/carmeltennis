@@ -556,48 +556,54 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     }
     final partnerDisplayName = _displayPartner(partner);
 
-    if (!widget.isManager) {
-      final results = await Future.wait([
-        _resManager.hasExistingReservation(myName, bookingDate),
-        _resManager.hasExistingReservation(partner, bookingDate),
-      ]);
-      if (results[0] || results[1]) {
-        final blocking = results[0] ? myName : partner;
-        throw _BookingValidationError('משתמש $blocking כבר מוזמן');
-      }
-    }
-
-    Map<String, Set<String>> eveningBaseline = const {};
-    if (!widget.isManager && isEveningQuotaHour(hour)) {
-      final cells = await Future.wait([
-        _resManager.weeklyEveningCells(myName, bookingDate),
-        _resManager.weeklyEveningCells(partner, bookingDate),
-      ]);
-      if (cells[0].length >= kWeeklyEveningQuota ||
-          cells[1].length >= kWeeklyEveningQuota) {
-        final blocking =
-            cells[0].length >= kWeeklyEveningQuota ? myName : partner;
-        throw _BookingValidationError(
-          'ל-$blocking כבר יש 3 הזמנות השבוע בשעות 18:00, 19:00 ו-20:00',
-        );
-      }
-      // Handed to the transaction so the quota survives a cross-date race —
-      // this query alone is read-then-write, same hole as the day rule.
-      eveningBaseline = {myName: cells[0], partner: cells[1]};
-    }
-
     final formattedDate = _fmt(bookingDate);
 
+    // Every pre-flight read is independent of the others, so fire them all at
+    // once and await together — awaiting each in turn cost a round trip each,
+    // in series, before the transaction had even started. Awaiting via a
+    // single Future.wait also means none of them can complete with an
+    // unhandled error while we are busy throwing on an earlier one.
+    final dayFuture = widget.isManager
+        ? Future.value(const <bool>[false, false])
+        : Future.wait([
+            _resManager.hasExistingReservation(myName, bookingDate),
+            _resManager.hasExistingReservation(partner, bookingDate),
+          ]);
+    final quotaFuture = !widget.isManager && isEveningQuotaHour(hour)
+        ? Future.wait([
+            _resManager.countWeeklyEveningReservations(myName, bookingDate),
+            _resManager.countWeeklyEveningReservations(partner, bookingDate),
+          ])
+        : Future.value(const <int>[0, 0]);
     // Legacy docs use a timestamp id, so they can occupy this cell without
     // sharing the deterministic id the transaction below guards. A pre-check
     // covers them until backfill normalizes the collection.
-    final legacy = await FirebaseFirestore.instance
+    final legacyFuture = FirebaseFirestore.instance
         .collection('reservations')
         .where('date', isEqualTo: formattedDate)
         .where('courtNumber', isEqualTo: dbCourtNumber)
         .where('hour', isEqualTo: hour)
         .limit(1)
         .get();
+
+    final pre =
+        await Future.wait<Object>([dayFuture, quotaFuture, legacyFuture]);
+    final alreadyBooked = pre[0] as List<bool>;
+    final eveningCounts = pre[1] as List<int>;
+    final legacy = pre[2] as QuerySnapshot<Map<String, dynamic>>;
+
+    if (alreadyBooked[0] || alreadyBooked[1]) {
+      final blocking = alreadyBooked[0] ? myName : partner;
+      throw _BookingValidationError('משתמש $blocking כבר מוזמן');
+    }
+    if (eveningCounts[0] >= kWeeklyEveningQuota ||
+        eveningCounts[1] >= kWeeklyEveningQuota) {
+      final blocking =
+          eveningCounts[0] >= kWeeklyEveningQuota ? myName : partner;
+      throw _BookingValidationError(
+        'ל-$blocking כבר יש 3 הזמנות השבוע בשעות 18:00, 19:00 ו-20:00',
+      );
+    }
     if (legacy.docs.isNotEmpty) {
       throw _BookingValidationError('המשבצת נתפסה כרגע — נסה שוב');
     }
@@ -612,7 +618,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
       userName: myName,
       partner: partner,
       claimDayLocks: !widget.isManager,
-      eveningBaseline: eveningBaseline,
     );
 
     // Post-booking side effects only from here down. The reservation is
@@ -1013,11 +1018,13 @@ class _Reservation {
     final data = doc.data() as Map<String, dynamic>;
     return _Reservation(
       docId: doc.id,
-      date: (data['date'] ?? '') as String,
-      courtNumber: (data['courtNumber'] ?? 0) as int,
-      hour: (data['hour'] ?? 0) as int,
-      userName: (data['userName'] ?? '') as String,
-      partner: (data['partner'] ?? '') as String,
+      // Defensive parsing, not casts — see readIntField: one type-drifted doc
+      // thrown from here kills the snapshot stream and hangs the whole grid.
+      date: data['date']?.toString() ?? '',
+      courtNumber: readIntField(data['courtNumber']) ?? 0,
+      hour: readIntField(data['hour']) ?? 0,
+      userName: data['userName']?.toString() ?? '',
+      partner: data['partner']?.toString() ?? '',
     );
   }
 

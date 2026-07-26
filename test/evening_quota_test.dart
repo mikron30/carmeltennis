@@ -53,62 +53,35 @@ void main() {
         '2026-03-28');
   });
 
-  // The quota's read-then-write race, closed inside the booking transaction:
-  // the week's day locks are re-counted there, so a racing evening commit on
-  // another day of the week collides instead of overshooting the quota.
-  group('atomic quota guard', () {
-    Future<void> book(String date, int hour,
-            {String user = 'קרינה',
-            Map<String, Set<String>> baseline = const {}}) =>
-        mgr.createReservation(
-          date: date,
-          courtNumber: 1,
-          hour: hour,
-          userName: user,
-          partner: 'שותף',
-          claimDayLocks: true,
-          eveningBaseline: baseline,
-        );
-
-    test('4th evening booking in a week is rejected from locks alone',
-        () async {
-      await book('2026-06-21', 18);
-      await book('2026-06-22', 19);
-      await book('2026-06-23', 20);
-      // Baseline deliberately empty — simulates the racing commit whose
-      // pre-check query ran before the others landed.
-      await expectLater(
-          book('2026-06-24', 18), throwsA(isA<BookingConflict>()));
+  // The quota counts a member in either role, across the whole booking week.
+  // It is enforced by the pre-check query in _commitBooking, NOT inside the
+  // booking transaction: see createReservation's doc comment for why the
+  // cross-date race is left open deliberately.
+  test('counts the member as partner too, and only within the week', () async {
+    await fake.collection('reservations').doc('2026-06-21_1_18').set({
+      'date': '2026-06-21',
+      'courtNumber': 1,
+      'hour': 18,
+      'userName': 'מישהו אחר',
+      'partner': 'קרינה', // counts — partner role
+      'isReserved': true,
     });
+    await seed('b', '2026-06-23', 1, 20); // counts — main-user role
+    await seed('c', '2026-06-28', 1, 19); // next week — must not count
 
-    test('lock-less legacy rows still count via the baseline', () async {
-      await seed('legacy1', '2026-06-21', 1, 18);
-      await seed('legacy2', '2026-06-22', 1, 19);
-      await seed('legacy3', '2026-06-23', 1, 20);
-      final cells = await mgr.weeklyEveningCells('קרינה', week);
-      expect(cells.length, 3);
-      await expectLater(
-          book('2026-06-24', 18, baseline: {'קרינה': cells}),
-          throwsA(isA<BookingConflict>()));
-    });
+    expect(await mgr.countWeeklyEveningReservations('קרינה', week), 2);
+  });
 
-    test('baseline and locks dedup by cell, not double-count', () async {
-      // One booking known to BOTH the baseline query and its own day lock
-      // must count once — not twice.
-      await book('2026-06-21', 18);
-      final cells = await mgr.weeklyEveningCells('קרינה', week);
-      expect(cells.length, 1);
-      await book('2026-06-22', 19, baseline: {'קרינה': cells}); // 2nd: fine
-      await book('2026-06-23', 20); // 3rd: fine
-      await expectLater(
-          book('2026-06-24', 18), throwsA(isA<BookingConflict>()));
-    });
-
-    test('non-evening booking is allowed at full evening quota', () async {
-      await book('2026-06-21', 18);
-      await book('2026-06-22', 19);
-      await book('2026-06-23', 20);
-      await book('2026-06-24', 10); // morning — must not throw
-    });
+  test('a booking created through createReservation is counted', () async {
+    await mgr.createReservation(
+      date: '2026-06-22',
+      courtNumber: 1,
+      hour: 19,
+      userName: 'קרינה',
+      partner: 'שותף',
+      claimDayLocks: true,
+    );
+    expect(await mgr.countWeeklyEveningReservations('קרינה', week), 1);
+    expect(await mgr.countWeeklyEveningReservations('שותף', week), 1);
   });
 }

@@ -48,16 +48,13 @@ class ReservationManager {
   /// [claimDayLocks] is false for manager bookings, which are allowed to
   /// override the one-per-day rule (unchanged behaviour).
   ///
-  /// For evening-quota hours the transaction ALSO re-verifies the weekly quota
-  /// from the week's day-lock docs: the quota pre-check query has the same
-  /// read-then-write race as the day rule, just across dates ("you book
-  /// Tuesday, I'll book Thursday" from two phones). Reading the week's locks
-  /// puts them in the transaction's read set, so a racing evening commit on
-  /// ANY day of the week forces a retry and gets recounted.
-  /// [eveningBaseline] carries each participant's already-committed evening
-  /// cells from the pre-check query — it covers lock-less rows (bookings made
-  /// before day locks existed, manager-created bookings); the lock scan covers
-  /// the race. Union of both, deduped by cell id, is the true count.
+  /// Deliberately NOT re-verified here: the weekly evening quota. It has the
+  /// same read-then-write race, but across dates, and closing it means reading
+  /// the week's locks — 6 extra transaction round trips per participant on
+  /// exactly the busiest slots. The failure it prevents is one member getting
+  /// a 4th evening in a week; the failure it causes is every evening booking
+  /// taking ~3x longer. The pre-check query still catches every sequential
+  /// case, which is how the quota has always worked.
   Future<void> createReservation({
     required String date,
     required int courtNumber,
@@ -65,7 +62,6 @@ class ReservationManager {
     required String userName,
     required String partner,
     required bool claimDayLocks,
-    Map<String, Set<String>> eveningBaseline = const {},
   }) async {
     final cellId = reservationCellId(date, courtNumber, hour);
     final ref = _firestore.collection('reservations').doc(cellId);
@@ -76,11 +72,6 @@ class ReservationManager {
     final lockRefs = lockOwners
         .map((n) => _firestore.collection('day_locks').doc(dayLockId(date, n)))
         .toList();
-    // Other days of the booking week — the booking date itself is resolved by
-    // the day-lock check (its lock is either absent or reclaimed-as-stale).
-    final quotaDates = claimDayLocks && isEveningQuotaHour(hour)
-        ? _weekDateKeys(date).where((d) => d != date).toList()
-        : const <String>[];
 
     await _firestore.runTransaction((tx) async {
       // Firestore requires every read before every write.
@@ -103,24 +94,6 @@ class ReservationManager {
         if (!held.exists) continue;
         throw BookingConflict('משתמש ${lockOwners[i]} כבר מוזמן');
       }
-      for (final owner in lockOwners) {
-        if (quotaDates.isEmpty) break;
-        final cells = <String>{...(eveningBaseline[owner] ?? const {})};
-        for (final d in quotaDates) {
-          final lock = await tx
-              .get(_firestore.collection('day_locks').doc(dayLockId(d, owner)));
-          final data = lock.data();
-          final h = data?['hour'];
-          final c = data?['cell'];
-          if (h is int && c is String && isEveningQuotaHour(h)) cells.add(c);
-        }
-        if (cells.length >= kWeeklyEveningQuota) {
-          throw BookingConflict(
-            'ל-$owner כבר יש $kWeeklyEveningQuota הזמנות השבוע בשעות 18:00, 19:00 ו-20:00',
-          );
-        }
-      }
-
       tx.set(ref, {
         'date': date,
         'courtNumber': courtNumber,
@@ -133,15 +106,6 @@ class ReservationManager {
         tx.set(lock, {'cell': cellId, 'date': date, 'hour': hour});
       }
     });
-  }
-
-  /// The 7 date keys of the booking week containing [date] (a yyyy-MM-dd key).
-  List<String> _weekDateKeys(String date) {
-    final start = startOfBookingWeek(DateTime.parse(date));
-    return [
-      for (var i = 0; i < 7; i++)
-        bookingDateKey(DateTime(start.year, start.month, start.day + i)),
-    ];
   }
 
   /// Deletes every reservation doc occupying one cell (date+court+hour) and
@@ -193,22 +157,26 @@ class ReservationManager {
   Future<bool> hasExistingReservation(String userName, DateTime date) async {
     final String formattedDate = bookingDateKey(date);
 
-    // Query for reservations where the current user is the main user
-    final mainUserQuery = await _firestore
-        .collection('reservations')
-        .where('date', isEqualTo: formattedDate)
-        .where('userName', isEqualTo: userName)
-        .get();
+    // Both roles count as a booking, and the two queries are independent —
+    // awaiting them in sequence cost a needless round trip on every booking.
+    final queries = await Future.wait([
+      // ...where the member is the main user
+      _firestore
+          .collection('reservations')
+          .where('date', isEqualTo: formattedDate)
+          .where('userName', isEqualTo: userName)
+          .limit(1)
+          .get(),
+      // ...and where they are the partner
+      _firestore
+          .collection('reservations')
+          .where('date', isEqualTo: formattedDate)
+          .where('partner', isEqualTo: userName)
+          .limit(1)
+          .get(),
+    ]);
 
-    // Query for reservations where the current user is the partner
-    final partnerQuery = await _firestore
-        .collection('reservations')
-        .where('date', isEqualTo: formattedDate)
-        .where('partner', isEqualTo: userName)
-        .get();
-
-    // If either query returns any documents, the user has an existing reservation
-    return mainUserQuery.docs.isNotEmpty || partnerQuery.docs.isNotEmpty;
+    return queries.any((q) => q.docs.isNotEmpty);
   }
 
   Future<int> countWeeklyEveningReservations(
@@ -261,10 +229,19 @@ class ReservationManager {
     return countedCells;
   }
 
-  int? _readHour(Object? value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
-  }
+  int? _readHour(Object? value) => readIntField(value);
+}
+
+/// Coerces a Firestore int field that may have drifted to String or double.
+///
+/// `hour` and `courtNumber` have drifted to String on some docs — enough that
+/// inspect_dupes.py scans for it. A hard `as int` cast on one of those throws
+/// inside the snapshot listener, which kills the stream: setState never runs,
+/// `_loadingDay` never clears, and the whole grid sits on its loader. One bad
+/// doc would brick booking for every member at once, so parse defensively.
+int? readIntField(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }
