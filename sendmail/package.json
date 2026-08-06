@@ -1,0 +1,21 @@
+{
+  "name": "sendmail",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "check": "node --check index.js",
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "nodemailer": "^7.0.2"
+  }
+}

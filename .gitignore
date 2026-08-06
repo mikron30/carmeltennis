@@ -31,6 +31,11 @@ migrate_working_dir/
 .pub/
 /build/
 functions/node_modules/
+# Local Firebase Functions deployment settings.  Keep the project-specific
+# file untracked even though it contains only non-secret values today.
+functions/.env
+functions/.env.*
+!functions/.env.example
 
 # Symbolication related
 app.*.symbols

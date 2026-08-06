@@ -1,0 +1,11 @@
+# Local development values may contain NVR or mail-service secrets.
+.env
+.env.*
+!.env.example
+
+# Never retain downloaded recordings or converted clips in the source tree.
+*.mp4
+*.dav
+*.ts
+__pycache__/
+*.py[cod]

@@ -1,13 +1,20 @@
 const {setGlobalOptions} = require("firebase-functions/v2");
-const {HttpsError, onCall} = require("firebase-functions/v2/https");
+const {HttpsError, onCall, onRequest} = require("firebase-functions/v2/https");
+const {defineSecret} = require("firebase-functions/params");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {
+  createEspHttpHandler,
+  processManagerVideoRequest,
+} = require("./src/video/ingress");
+const {isVideoRequestError} = require("./src/video/errors");
 
 initializeApp();
 setGlobalOptions({region: "europe-west3", maxInstances: 10});
 
 const USERS_COLLECTION = "users_2024";
+const esp32VideoDeviceKeys = defineSecret("ESP32_VIDEO_DEVICE_KEYS");
 const MANAGER_NAMES = new Set([
   "אודי אש",
   "רני לפלר",
@@ -95,4 +102,73 @@ exports.deleteUserAccount = onCall(async (request) => {
     deleted: true,
     firestoreRecordDeleted: !targetDocuments.empty,
   };
+});
+
+function callableVideoError(error) {
+  if (error instanceof HttpsError) return error;
+  if (!isVideoRequestError(error)) {
+    return new HttpsError("internal", "Video request failed");
+  }
+  if (error.code === "invalid_request") {
+    return new HttpsError("invalid-argument", error.message);
+  }
+  if (error.code === "button_rate_limited") {
+    return new HttpsError("resource-exhausted", error.message);
+  }
+  if (error.code === "video_queue_unavailable") {
+    return new HttpsError("unavailable", "Video processing is temporarily unavailable");
+  }
+  if (error.code === "video_configuration_error") {
+    return new HttpsError("failed-precondition", "Video service is not configured");
+  }
+  if (error.code === "reservation_not_found" || error.code === "player_not_found") {
+    return new HttpsError("not-found", error.message);
+  }
+  return new HttpsError("failed-precondition", error.message);
+}
+
+const requestVideoClipHandler = createEspHttpHandler({
+  db: getFirestore(),
+  getDeviceKeyConfiguration: () => esp32VideoDeviceKeys.value(),
+});
+
+/**
+ * Public HTTPS endpoint for the physical court buttons.  Every accepted
+ * request is authenticated with its device HMAC before any reservation data is
+ * read, and the secret binding keeps device keys out of source control.
+ */
+exports.requestVideoClip = onRequest({
+  region: "europe-west3",
+  cors: false,
+  timeoutSeconds: 60,
+  secrets: [esp32VideoDeviceKeys],
+}, requestVideoClipHandler);
+
+/**
+ * Manager-only path used by the web app to test or manually request a clip.
+ * `processManagerVideoRequest` invokes assertManager server-side; the client
+ * manager menu is only a convenience and is not an authorization boundary.
+ */
+exports.requestVideoClipForManager = onCall({
+  region: "europe-west3",
+  timeoutSeconds: 60,
+}, async (request) => {
+  try {
+    const result = await processManagerVideoRequest(request, {
+      db: getFirestore(),
+      assertManager,
+    });
+    // Do not log the manager's email or supplied recipient address.
+    console.info("Manager video request accepted", {
+      requestId: result.requestId,
+      status: result.status,
+      deduplicated: result.deduplicated,
+      courtNumber: request.data?.courtNumber,
+    });
+    return result;
+  } catch (error) {
+    const code = isVideoRequestError(error) ? error.code : "internal_error";
+    console.error("Manager video request failed", {code});
+    throw callableVideoError(error);
+  }
 });

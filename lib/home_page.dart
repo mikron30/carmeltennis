@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide EmailAuthProvider, PhoneAuthProvider;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +11,7 @@ import 'booking_tokens.dart';
 import 'src/authentication.dart';
 import 'user_manager.dart';
 import 'hoilday.dart';
+import 'manager_video_request_screen.dart';
 import 'users_management.dart';
 import 'theme_controller.dart';
 import 'dart:async';
@@ -546,6 +548,22 @@ class _HomepageState extends State<HomePage> with WidgetsBindingObserver {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ManageUsersScreen()),
+                  );
+                },
+              ),
+            ),
+          // Web-only manager test path for requesting a court recording.
+          if (kIsWeb && isManager)
+            _themedTile(
+              context,
+              ListTile(
+                leading: Icon(Icons.video_library, color: iconTheme.color),
+                title: Text('שליחת וידאו ידנית', style: titleStyle),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ManagerVideoRequestScreen(),
+                    ),
                   );
                 },
               ),

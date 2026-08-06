@@ -6,9 +6,11 @@
     "node": "22"
   },
   "scripts": {
-    "check": "node --check index.js"
+    "check": "node --check index.js && node --check src/video/config.js && node --check src/video/errors.js && node --check src/video/ingress.js && node --check src/video/israel-time.js && node --check src/video/jobs.js && node --check src/video/reservations.js && node --check src/video/signature.js && node --check src/video/tasks.js && node --check src/video/users.js",
+    "test": "node --test"
   },
   "dependencies": {
+    "@google-cloud/tasks": "^6.1.0",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.2.5"
   }
