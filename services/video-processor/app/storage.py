@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -11,6 +12,9 @@ from typing import Any
 from .config import Settings
 from .errors import StorageOperationError
 from .jobs import validate_request_id
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -77,13 +81,28 @@ class CloudStorageClipStore:
         blob = self._bucket.blob(object_name)
         expires_at = datetime.now(UTC) + timedelta(seconds=self._settings.signed_url_ttl_seconds)
         try:
-            url = blob.generate_signed_url(
-                version="v4",
-                expiration=expires_at,
-                method="GET",
-                response_type="video/mp4",
-                response_disposition="attachment; filename=tennis-court-video.mp4",
-            )
+            options = {
+                "version": "v4",
+                "expiration": expires_at,
+                "method": "GET",
+                "response_type": "video/mp4",
+                "response_disposition": "attachment; filename=tennis-court-video.mp4",
+            }
+            if self._settings.signed_url_service_account_email:
+                # Cloud Run's metadata credentials have no local private key.
+                # Supplying the access token and service account delegates V4
+                # signing to IAM Credentials' signBlob API.
+                from google.auth import default
+                from google.auth.transport.requests import Request
+
+                credentials, _ = default(
+                    scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                )
+                credentials.refresh(Request())
+                options["service_account_email"] = self._settings.signed_url_service_account_email
+                options["access_token"] = credentials.token
+            url = blob.generate_signed_url(**options)
         except Exception as error:  # Includes missing IAM signBlob permission.
+            LOGGER.warning("video_signed_url_failed exception_type=%s", type(error).__name__)
             raise StorageOperationError("A secure video download URL could not be created.") from error
         return SignedDownload(url=url, expires_at=expires_at)

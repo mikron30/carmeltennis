@@ -83,24 +83,25 @@ function parseManagerDate(dateText) {
 }
 
 function parseManagerTime(timeText) {
-  const match = /^(\d{2}):(\d{2})$/.exec(String(timeText || ""));
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(timeText || ""));
   if (!match) {
     throw new VideoRequestError(
         "invalid_request",
-        "time must use HH:mm",
+        "time must use HH:mm or HH:mm:ss",
         {httpStatus: 400},
     );
   }
   const hour = Number(match[1]);
   const minute = Number(match[2]);
-  if (hour > 23 || minute > 59) {
+  const second = match[3] === undefined ? 0 : Number(match[3]);
+  if (hour > 23 || minute > 59 || second > 59) {
     throw new VideoRequestError(
         "invalid_request",
         "time is not a clock time",
         {httpStatus: 400},
     );
   }
-  return {hour, minute};
+  return {hour, minute, second};
 }
 
 function hasSameLocalParts(candidate, wanted) {
@@ -110,7 +111,7 @@ function hasSameLocalParts(candidate, wanted) {
     actual.day === wanted.day &&
     actual.hour === wanted.hour &&
     actual.minute === wanted.minute &&
-    actual.second === 0;
+    actual.second === wanted.second;
 }
 
 function offsetAt(candidate) {
@@ -129,20 +130,20 @@ function offsetAt(candidate) {
 /**
  * Converts a manager-selected wall-clock time in Israel to an instant.  It
  * rejects skipped and duplicated DST clock readings; asking the manager to
- * choose an unambiguous minute is safer than silently downloading the wrong
+ * choose an unambiguous instant is safer than silently downloading the wrong
  * recording.
  */
 function israelLocalDateTimeToUtc(dateText, timeText) {
   const date = parseManagerDate(dateText);
   const time = parseManagerTime(timeText);
-  const wanted = {...date, ...time, second: 0};
+  const wanted = {...date, ...time};
   const localClockAsUtc = Date.UTC(
       wanted.year,
       wanted.month - 1,
       wanted.day,
       wanted.hour,
       wanted.minute,
-      0,
+      wanted.second,
   );
 
   // Israel only has two practical offsets, but sampling broadly makes this

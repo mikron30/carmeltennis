@@ -20,10 +20,11 @@ class ManagerVideoRequestScreen extends StatefulWidget {
 
 class _ManagerVideoRequestScreenState extends State<ManagerVideoRequestScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _emailController = TextEditingController(text: 'mikron30@gmail.com');
 
   late DateTime _selectedDate;
   late TimeOfDay _selectedTime;
+  late int _selectedSecond;
   int _courtNumber = 1;
   bool _isSubmitting = false;
   String? _successMessage;
@@ -34,6 +35,7 @@ class _ManagerVideoRequestScreenState extends State<ManagerVideoRequestScreen> {
     final now = IsraelTime.now();
     _selectedDate = DateTime(now.year, now.month, now.day);
     _selectedTime = TimeOfDay.fromDateTime(now);
+    _selectedSecond = now.second;
   }
 
   @override
@@ -45,7 +47,8 @@ class _ManagerVideoRequestScreenState extends State<ManagerVideoRequestScreen> {
   String get _dateValue => DateFormat('yyyy-MM-dd').format(_selectedDate);
 
   String get _timeValue => '${_selectedTime.hour.toString().padLeft(2, '0')}:'
-      '${_selectedTime.minute.toString().padLeft(2, '0')}';
+      '${_selectedTime.minute.toString().padLeft(2, '0')}:'
+      '${_selectedSecond.toString().padLeft(2, '0')}';
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -210,6 +213,30 @@ class _ManagerVideoRequestScreenState extends State<ManagerVideoRequestScreen> {
                         onPressed: _isSubmitting ? null : _pickTime,
                         icon: const Icon(Icons.schedule),
                         label: Text('שעה: $_timeValue'),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedSecond,
+                        decoration: const InputDecoration(
+                          labelText: 'שניות',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(
+                          60,
+                          (second) => DropdownMenuItem(
+                            value: second,
+                            child: Text(second.toString().padLeft(2, '0')),
+                          ),
+                        ),
+                        onChanged: _isSubmitting
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  _selectedSecond = value;
+                                  _successMessage = null;
+                                });
+                              },
                       ),
                       const SizedBox(height: 16),
                       TextFormField(

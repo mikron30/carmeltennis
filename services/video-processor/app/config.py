@@ -44,6 +44,7 @@ class Settings:
     mail_service_url: str
     court_cameras: tuple[CourtCamera, ...]
     nvr_time_zone: tzinfo
+    nvr_search_results_are_local_time: bool
     nvr_allow_insecure_http: bool
     nvr_verify_tls: bool | str
     nvr_track_suffix: int
@@ -56,6 +57,7 @@ class Settings:
     max_clip_seconds: int
     ffmpeg_timeout_seconds: int
     signed_url_ttl_seconds: int
+    signed_url_service_account_email: str | None
     processing_lease_seconds: int
     max_processing_attempts: int
     require_cloud_tasks_header: bool
@@ -129,6 +131,11 @@ class Settings:
             mail_service_url=required("MAIL_SERVICE_URL"),
             court_cameras=_parse_court_cameras(optional("COURT_CAMERA_MAP", "")),
             nvr_time_zone=nvr_time_zone,
+            nvr_search_results_are_local_time=_boolean(
+                values,
+                "NVR_SEARCH_RESULTS_ARE_LOCAL_TIME",
+                False,
+            ),
             nvr_allow_insecure_http=allow_insecure_http,
             nvr_verify_tls=nvr_verify_tls,
             nvr_track_suffix=integer("NVR_TRACK_SUFFIX", 1, minimum=0, maximum=99),
@@ -141,6 +148,9 @@ class Settings:
             max_clip_seconds=integer("MAX_CLIP_SECONDS", 60, minimum=1, maximum=600),
             ffmpeg_timeout_seconds=integer("FFMPEG_TIMEOUT_SECONDS", 600, minimum=30, maximum=1_800),
             signed_url_ttl_seconds=ttl,
+            signed_url_service_account_email=_optional_secret(
+                values.get("SIGNED_URL_SERVICE_ACCOUNT_EMAIL"),
+            ),
             processing_lease_seconds=lease,
             max_processing_attempts=integer("MAX_PROCESSING_ATTEMPTS", 5, minimum=1, maximum=20),
             require_cloud_tasks_header=_boolean(values, "REQUIRE_CLOUD_TASKS_HEADER", True),

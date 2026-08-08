@@ -8,9 +8,10 @@ Secret Manager-backed environment variables.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
+from uuid import uuid4
 from xml.sax.saxutils import escape
 
 import requests
@@ -96,7 +97,14 @@ class HikvisionClient:
             headers={"Content-Type": "application/xml", "Accept": "application/xml"},
         )
         try:
-            return _parse_search_result(response.content)
+            return _parse_search_result(
+                response.content,
+                local_wall_clock_timezone=(
+                    self._settings.nvr_time_zone
+                    if self._settings.nvr_search_results_are_local_time
+                    else None
+                ),
+            )
         except Exception as error:
             raise NvrProtocolError("The NVR returned an invalid recording-search response.") from error
         finally:
@@ -108,9 +116,15 @@ class HikvisionClient:
         response = self._request(
             "GET",
             self._url(self._settings.nvr_download_path),
-            params={"playbackURI": match.playback_uri},
+            # This firmware expects the playback URI in the documented XML
+            # request body, even for GET. Passing it as a query parameter is
+            # rejected with HTTP 400.
+            data=_build_download_xml(match.playback_uri).encode("utf-8"),
             stream=True,
-            headers={"Accept": "video/*,application/octet-stream"},
+            headers={
+                "Content-Type": "application/xml",
+                "Accept": "video/*,application/octet-stream",
+            },
         )
         destination.parent.mkdir(parents=True, exist_ok=True)
         written = 0
@@ -175,7 +189,7 @@ def _build_search_xml(*, track_id: str, start: str, end: str) -> str:
 
     return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <CMSearchDescription>
-  <searchID>carmel-tennis-video-request</searchID>
+  <searchID>{uuid4()}</searchID>
   <trackList><trackID>{escape(track_id)}</trackID></trackList>
   <timeSpanList>
     <timeSpan>
@@ -189,13 +203,26 @@ def _build_search_xml(*, track_id: str, start: str, end: str) -> str:
 </CMSearchDescription>"""
 
 
+def _build_download_xml(playback_uri: str) -> str:
+    """Build the ISAPI download request required by DS-7608NXI firmware."""
+
+    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<downloadRequest>
+  <playbackURI>{escape(playback_uri)}</playbackURI>
+</downloadRequest>"""
+
+
 def _nvr_timestamp(value: datetime, settings: Settings) -> str:
     if value.tzinfo is None:
         raise NvrProtocolError("NVR timestamps must be timezone-aware.")
     return value.astimezone(settings.nvr_time_zone).isoformat(timespec="seconds")
 
 
-def _parse_search_result(xml_payload: bytes) -> list[PlaybackMatch]:
+def _parse_search_result(
+    xml_payload: bytes,
+    *,
+    local_wall_clock_timezone: object | None = None,
+) -> list[PlaybackMatch]:
     root = ElementTree.fromstring(xml_payload)
     matches: list[PlaybackMatch] = []
     for item in _elements_named(root, "searchMatchItem"):
@@ -204,11 +231,17 @@ def _parse_search_result(xml_payload: bytes) -> list[PlaybackMatch]:
         playback_uri = _descendant_text(source, "playbackURI")
         if not playback_uri:
             continue
+        # DS-7608NXI firmware puts the segment bounds in a sibling timeSpan
+        # on searchMatchItem, while other firmware nests them inside the media
+        # descriptor. Read both layouts so FFmpeg can seek to the requested
+        # instant rather than always using the beginning of a larger segment.
+        start_time = _descendant_text(source, "startTime") or _descendant_text(item, "startTime")
+        end_time = _descendant_text(source, "endTime") or _descendant_text(item, "endTime")
         matches.append(
             PlaybackMatch(
                 playback_uri=playback_uri,
-                segment_start=_parse_datetime(_descendant_text(source, "startTime")),
-                segment_end=_parse_datetime(_descendant_text(source, "endTime")),
+                segment_start=_parse_datetime(start_time, local_wall_clock_timezone),
+                segment_end=_parse_datetime(end_time, local_wall_clock_timezone),
             ),
         )
 
@@ -221,8 +254,14 @@ def _parse_search_result(xml_payload: bytes) -> list[PlaybackMatch]:
                 matches.append(
                     PlaybackMatch(
                         playback_uri=playback_uri,
-                        segment_start=_parse_datetime(_descendant_text(descriptor, "startTime")),
-                        segment_end=_parse_datetime(_descendant_text(descriptor, "endTime")),
+                        segment_start=_parse_datetime(
+                            _descendant_text(descriptor, "startTime"),
+                            local_wall_clock_timezone,
+                        ),
+                        segment_end=_parse_datetime(
+                            _descendant_text(descriptor, "endTime"),
+                            local_wall_clock_timezone,
+                        ),
                     ),
                 )
     return matches
@@ -279,11 +318,17 @@ def _local_name(tag: object) -> str:
     return str(tag).rsplit("}", 1)[-1]
 
 
-def _parse_datetime(value: str | None) -> datetime | None:
+def _parse_datetime(value: str | None, local_wall_clock_timezone: object | None = None) -> datetime | None:
     if not value:
         return None
     try:
+        # This DS-7608NXI reports Israel wall-clock values with a literal Z.
+        # Treat such values as local only when the deployment opts in; other
+        # Hikvision devices correctly use Z for UTC.
+        if value.endswith("Z") and local_wall_clock_timezone is not None:
+            local = datetime.fromisoformat(value[:-1])
+            return local.replace(tzinfo=local_wall_clock_timezone).astimezone(UTC)
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed if parsed.tzinfo is not None else None
+    return parsed.astimezone(UTC) if parsed.tzinfo is not None else None
