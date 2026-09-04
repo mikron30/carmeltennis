@@ -1,16 +1,16 @@
-"""Private Cloud Storage upload and short-lived V4 download URL creation."""
+"""Private Cloud Storage upload and direct V4 download URL creation."""
 
 from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from .config import Settings
-from .errors import StorageOperationError
+from .errors import StorageOperationError, VideoAccessExpiredError
 from .jobs import validate_request_id
 
 
@@ -21,16 +21,17 @@ LOGGER = logging.getLogger(__name__)
 class StoredClip:
     object_name: str
     bytes_written: int
+    created_at: datetime
 
 
 @dataclass(frozen=True)
 class SignedDownload:
-    url: str
+    url: str = field(repr=False)
     expires_at: datetime
 
 
 class CloudStorageClipStore:
-    """Stores only private objects; callers keep signed URLs in memory only."""
+    """Stores private, opaque MP4 objects and creates in-memory download URLs."""
 
     def __init__(self, settings: Settings, client: Any | None = None) -> None:
         self._settings = settings
@@ -73,15 +74,50 @@ class CloudStorageClipStore:
                 already_exists = False
             if not already_exists:
                 raise StorageOperationError("The MP4 could not be uploaded to Cloud Storage.") from error
-        return StoredClip(object_name=object_name, bytes_written=local_path.stat().st_size)
 
-    def create_download(self, object_name: str) -> SignedDownload:
+        try:
+            # Always reload, including on retries, so access expiry is anchored
+            # to the authoritative creation time of the existing live object.
+            blob.reload()
+        except Exception as error:
+            raise StorageOperationError(
+                "The uploaded MP4 metadata could not be read from Cloud Storage.",
+            ) from error
+        created_at = blob.time_created
+        if not isinstance(created_at, datetime) or created_at.tzinfo is None:
+            raise StorageOperationError(
+                "The uploaded MP4 has no valid Cloud Storage creation timestamp.",
+            )
+        return StoredClip(
+            object_name=object_name,
+            bytes_written=local_path.stat().st_size,
+            created_at=created_at.astimezone(UTC),
+        )
+
+    def create_download(self, stored_clip: StoredClip) -> SignedDownload:
+        """Create the old-style direct Storage link without persisting it."""
+
+        object_name = stored_clip.object_name
         if not object_name.startswith("video-clips/") or not object_name.endswith(".mp4"):
             raise StorageOperationError("The requested Cloud Storage object is invalid.")
+
+        now = datetime.now(UTC)
+        retention_expiry = stored_clip.created_at.astimezone(UTC) + timedelta(
+            seconds=self._settings.signed_url_ttl_seconds,
+        )
+        if retention_expiry <= now:
+            raise VideoAccessExpiredError(
+                "The stored video has reached the end of its access period.",
+            )
+        # V4 URLs may not exceed seven days from signing. Capping also protects
+        # against small clock differences between Cloud Storage and this worker.
+        expires_at = min(
+            retention_expiry,
+            now + timedelta(seconds=self._settings.signed_url_ttl_seconds),
+        )
         blob = self._bucket.blob(object_name)
-        expires_at = datetime.now(UTC) + timedelta(seconds=self._settings.signed_url_ttl_seconds)
         try:
-            options = {
+            options: dict[str, Any] = {
                 "version": "v4",
                 "expiration": expires_at,
                 "method": "GET",
@@ -89,9 +125,8 @@ class CloudStorageClipStore:
                 "response_disposition": "attachment; filename=tennis-court-video.mp4",
             }
             if self._settings.signed_url_service_account_email:
-                # Cloud Run's metadata credentials have no local private key.
-                # Supplying the access token and service account delegates V4
-                # signing to IAM Credentials' signBlob API.
+                # Cloud Run metadata credentials have no local private key.
+                # IAM Credentials signs the URL without storing a key file.
                 from google.auth import default
                 from google.auth.transport.requests import Request
 
@@ -104,5 +139,9 @@ class CloudStorageClipStore:
             url = blob.generate_signed_url(**options)
         except Exception as error:  # Includes missing IAM signBlob permission.
             LOGGER.warning("video_signed_url_failed exception_type=%s", type(error).__name__)
-            raise StorageOperationError("A secure video download URL could not be created.") from error
+            raise StorageOperationError(
+                "A secure video download URL could not be created.",
+            ) from error
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise StorageOperationError("A secure video download URL could not be created.")
         return SignedDownload(url=url, expires_at=expires_at)

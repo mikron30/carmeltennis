@@ -66,6 +66,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   // the first was still in its ~1s network window — both then passed the
   // one-booking-per-day pre-check. This blocks that at the source.
   bool _committing = false;
+  bool _choosingPartner = false;
 
   final _toast = ToastController();
   final _resManager = ReservationManager();
@@ -75,19 +76,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     super.initState();
     final now = IsraelTime.now();
     _selectedDate = _effectiveToday(now);
-    _selectedPartner = _firstSelectablePartner(widget.lastFivePartners);
     _refreshCourtsThenLoad();
-  }
-
-  @override
-  void didUpdateWidget(covariant BookingScreenV31 oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final initialPartner = _firstSelectablePartner(widget.lastFivePartners);
-    if (oldWidget.lastFivePartners != widget.lastFivePartners &&
-        _selectedPartner == null &&
-        initialPartner != null) {
-      setState(() => _selectedPartner = initialPartner);
-    }
   }
 
   @override
@@ -237,8 +226,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
   }
 
   bool _isPast(int hour, DateTime now) {
-    final viewingToday = _isSameDay(_selectedDate, _effectiveToday(now));
-    if (!viewingToday) return false;
     final reservationDt = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -348,16 +335,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     return widget.isManager && value.trim() == _adminBookingLabel;
   }
 
-  String? _firstSelectablePartner(Iterable<String> partners) {
-    for (final partner in partners) {
-      final trimmed = partner.trim();
-      if (trimmed.isEmpty) continue;
-      if (_isAdminBookingSelection(trimmed)) continue;
-      return partner;
-    }
-    return null;
-  }
-
   bool _hasPartnerForBooking(String partner) {
     final trimmed = partner.trim();
     return trimmed.isNotEmpty && !_isAdminBookingSelection(trimmed);
@@ -423,10 +400,96 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     setState(() => _selectedPartner = value);
   }
 
+  String _normalizePartnerName(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  String? _canonicalPartnerName(String value) {
+    final normalized = _normalizePartnerName(value);
+    if (normalized.isEmpty) return null;
+    for (final candidate in widget.allUsers) {
+      if (_normalizePartnerName(candidate) == normalized) return candidate;
+    }
+    return null;
+  }
+
+  Future<String?> _showPartnerDialog() async {
+    var typedValue = '';
+    String? inputError;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDialogState) {
+          void submitPartner() {
+            final partner = _canonicalPartnerName(typedValue);
+            if (partner != null) {
+              Navigator.of(ctx).pop(partner);
+              return;
+            }
+            setDialogState(() => inputError = 'יש לבחור שותפ.ה מהרשימה');
+          }
+
+          return AlertDialog(
+            title: const Text('בחר שותפ.ה'),
+            content: Autocomplete<String>(
+              optionsBuilder: (text) {
+                if (text.text.isEmpty) return const Iterable<String>.empty();
+                return widget.allUsers.where(
+                    (u) => u.toLowerCase().contains(text.text.toLowerCase()));
+              },
+              onSelected: (value) => Navigator.of(ctx).pop(value),
+              fieldViewBuilder: (ctx, controller, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    hintText: 'שם שותפ.ה',
+                    errorText: inputError,
+                  ),
+                  onChanged: (value) {
+                    typedValue = value;
+                    if (inputError != null) {
+                      setDialogState(() => inputError = null);
+                    }
+                  },
+                  onSubmitted: (_) {
+                    final query = typedValue.trim().toLowerCase();
+                    final hasSuggestion = query.isNotEmpty &&
+                        widget.allUsers
+                            .any((u) => u.toLowerCase().contains(query));
+                    if (hasSuggestion) {
+                      onFieldSubmitted();
+                    } else {
+                      submitPartner();
+                    }
+                  },
+                );
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('ביטול'),
+              ),
+              TextButton(
+                onPressed: submitPartner,
+                child: const Text('אישור'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+    final partner = picked?.trim();
+    return partner == null || partner.isEmpty ? null : partner;
+  }
+
   void _handleTap(int courtUiIndex, int hour) async {
     // Day switch hasn't finished loading the new day's reservations yet —
     // ignore taps so we don't act on the previous day's cached data.
     if (_loadingDay) return;
+    final selectedDateAtTap = _selectedDate;
     final dbCourtNumber = _numberOfCourts - courtUiIndex;
     final reservation =
         _selectedDayByCell[dbCourtNumber]?[hour] ?? _Reservation.empty();
@@ -454,7 +517,37 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     if (_isPast(hour, now) && !widget.isManager) return;
 
     // One booking commit in flight at a time.
-    if (_committing) return;
+    if (_committing || _choosingPartner) return;
+
+    if ((_selectedPartner?.trim() ?? '').isEmpty) {
+      _choosingPartner = true;
+      String? picked;
+      try {
+        picked = await _showPartnerDialog();
+      } finally {
+        _choosingPartner = false;
+      }
+      if (!mounted || picked == null) return;
+      await _selectPartner(picked);
+      if (!mounted) return;
+
+      // The picker may stay open across the booking cutoff or a live slot
+      // update. Revalidate the original cell before continuing with the
+      // court/hour captured by this tap.
+      if (_loadingDay ||
+          !_isSameDay(_selectedDate, selectedDateAtTap) ||
+          _numberOfCourts - courtUiIndex != dbCourtNumber ||
+          _committing) {
+        return;
+      }
+      final currentReservation =
+          _selectedDayByCell[dbCourtNumber]?[hour] ?? _Reservation.empty();
+      if (currentReservation.hour >= 0) {
+        _toast.show(context, 'המגרש כבר לא זמין', kind: ToastKind.warn);
+        return;
+      }
+      if (_isPast(hour, IsraelTime.now()) && !widget.isManager) return;
+    }
 
     if (!_validateSync()) return;
 
@@ -518,8 +611,7 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     }
     if (!widget.isManager) {
       if (_partnerHasReservationOnSelectedDay(myName)) {
-        _toast.show(context, 'משתמש $myName כבר מוזמן',
-            kind: ToastKind.warn);
+        _toast.show(context, 'משתמש $myName כבר מוזמן', kind: ToastKind.warn);
         return false;
       }
       if (_partnerHasReservationOnSelectedDay(partner)) {
@@ -852,50 +944,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
     _refreshCourtsThenLoad();
   }
 
-  void _onAddPartnerTap() async {
-    final controller = TextEditingController();
-    final picked = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('בחר שותפ.ה'),
-          content: Autocomplete<String>(
-            optionsBuilder: (text) {
-              if (text.text.isEmpty) return const Iterable<String>.empty();
-              return widget.allUsers.where(
-                  (u) => u.toLowerCase().contains(text.text.toLowerCase()));
-            },
-            onSelected: (v) {
-              controller.text = v;
-              Navigator.of(ctx).pop(v);
-            },
-            fieldViewBuilder: (ctx, ctl, focus, _) {
-              return TextField(
-                controller: ctl,
-                focusNode: focus,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: 'שם שותפ.ה'),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('ביטול'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              child: const Text('אישור'),
-            ),
-          ],
-        );
-      },
-    );
-    if (picked != null && picked.isNotEmpty) {
-      await _selectPartner(picked);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = BookingTokens.of(context);
@@ -945,7 +993,6 @@ class _BookingScreenV31State extends State<BookingScreenV31> {
               recents: recents,
               selected: _selectedPartner,
               onSelect: _selectPartner,
-              onAddTap: _onAddPartnerTap,
             ),
             if (widget.isManager)
               Container(

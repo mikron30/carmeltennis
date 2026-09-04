@@ -9,7 +9,7 @@ const {
   espRequestId,
   managerRequestId,
 } = require("./jobs");
-const {lookupActiveReservation} = require("./reservations");
+const {lookupReservationForPress} = require("./reservations");
 const {verifyEspPayload} = require("./signature");
 const {enqueueVideoProcessing} = require("./tasks");
 const {lookupPlayerEmails, validEmail} = require("./users");
@@ -59,6 +59,50 @@ async function enqueueIfQueued(outcome, taskConfig, now, enqueue) {
   return outcome;
 }
 
+function physicalClipWindow(pressedAt, ingressSettings) {
+  return {
+    clipStart: new Date(
+        pressedAt.getTime() -
+        (ingressSettings.buttonClipDurationSeconds * 1000),
+    ),
+    clipEnd: pressedAt,
+  };
+}
+
+function assertPhysicalClipInReservationSlot(
+    pressedAt,
+    clipStart,
+    selectionSource = "current",
+) {
+  // When the current slot is empty and its previous reservation is selected,
+  // a boundary-crossing clip still belongs to those previous players. The
+  // explicit 22:00-22:30 extension follows the same rule. A next-slot fallback
+  // remains strict so future players never receive footage from a prior hour.
+  if (selectionSource === "previous" ||
+      selectionSource === "closing_extension") {
+    return;
+  }
+  const pressedSlot = israelReservationSlot(pressedAt);
+  const clipStartSlot = israelReservationSlot(clipStart);
+  if (pressedSlot.date !== clipStartSlot.date ||
+      pressedSlot.hour !== clipStartSlot.hour) {
+    throw new VideoRequestError(
+        "reservation_boundary",
+        "Wait until the full video interval is inside the reservation hour",
+        {httpStatus: 409},
+    );
+  }
+}
+
+function managerClipWindow(pressedAt, ingressSettings) {
+  return {
+    clipStart: new Date(
+        pressedAt.getTime() - (ingressSettings.clipLeadSeconds * 1000),
+    ),
+    clipEnd: pressedAt,
+  };
+}
+
 /**
  * Complete trusted ESP32 ingress.  The device timestamp only proves freshness;
  * the captured server clock is the source of both the reservation slot and the
@@ -82,18 +126,23 @@ async function processEspVideoRequest(rawPayload, {
   const resolvedIngressSettings = ingressSettings || getSettings();
   const resolvedTaskConfig = taskConfig || getQueueConfig();
   const court = requireCourt(payload.courtNumber);
-  const slot = israelReservationSlot(now);
-  const reservation = await lookupActiveReservation(db, {
-    ...slot,
+  const {clipStart, clipEnd} = physicalClipWindow(
+      now,
+      resolvedIngressSettings,
+  );
+  const reservation = await lookupReservationForPress(db, {
+    pressedAt: now,
     courtNumber: payload.courtNumber,
   });
+  assertPhysicalClipInReservationSlot(
+      now,
+      clipStart,
+      reservation.selectionSource,
+  );
   const recipients = await lookupPlayerEmails(db, [
     reservation.userName,
     reservation.partner,
   ]);
-  const clipStart = new Date(
-      now.getTime() - (resolvedIngressSettings.clipLeadSeconds * 1000),
-  );
   const requestId = espRequestId(payload);
   const job = buildQueuedJob({
     requestKind: "esp32",
@@ -101,7 +150,7 @@ async function processEspVideoRequest(rawPayload, {
     cameraChannel: court.cameraChannel,
     pressedAt: now,
     clipStart,
-    clipEnd: now,
+    clipEnd,
     recipients,
     now,
     deviceId: payload.deviceId,
@@ -150,8 +199,9 @@ async function processManagerVideoRequest(request, {
     uid: request.auth?.uid || "",
     ...input,
   });
-  const clipStart = new Date(
-      pressedAt.getTime() - (resolvedIngressSettings.clipLeadSeconds * 1000),
+  const {clipStart, clipEnd} = managerClipWindow(
+      pressedAt,
+      resolvedIngressSettings,
   );
   const job = buildQueuedJob({
     requestKind: "manager",
@@ -159,7 +209,7 @@ async function processManagerVideoRequest(request, {
     cameraChannel: court.cameraChannel,
     pressedAt,
     clipStart,
-    clipEnd: pressedAt,
+    clipEnd,
     recipients: [input.recipientEmail],
     now,
     requestedByUid: request.auth?.uid || "",
@@ -249,8 +299,11 @@ function createEspHttpHandler({
 }
 
 module.exports = {
+  assertPhysicalClipInReservationSlot,
   createEspHttpHandler,
+  managerClipWindow,
   parseManagerInput,
+  physicalClipWindow,
   processEspVideoRequest,
   processManagerVideoRequest,
   publicHttpError,

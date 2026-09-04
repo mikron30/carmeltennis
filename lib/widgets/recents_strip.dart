@@ -17,14 +17,12 @@ class RecentsStrip extends StatelessWidget {
   final List<RecentPartner> recents;
   final String? selected;
   final ValueChanged<String> onSelect;
-  final VoidCallback? onAddTap;
 
   const RecentsStrip({
     super.key,
     required this.recents,
     required this.selected,
     required this.onSelect,
-    this.onAddTap,
   });
 
   @override
@@ -44,14 +42,12 @@ class RecentsStrip extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsetsDirectional.only(end: spec.recentsGap),
-            child: Text(
-              'עם:',
-              style: TextStyle(
-                color: tokens.ink2,
-                fontSize: spec.recentsLeadingFontSize,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+            child: _Chip(
+              partner: const RecentPartner(label: 'שותף', value: ''),
+              active: selected == null || selected!.trim().isEmpty,
+              tokens: tokens,
+              spec: spec,
+              onTap: () => onSelect(''),
             ),
           ),
           Expanded(
@@ -68,16 +64,13 @@ class RecentsStrip extends StatelessWidget {
                       spec: spec,
                       onTap: () => onSelect(recents[i].value),
                     ),
-                    if (i < recents.length - 1) SizedBox(width: spec.recentsGap),
+                    if (i < recents.length - 1)
+                      SizedBox(width: spec.recentsGap),
                   ],
                 ],
               ),
             ),
           ),
-          if (onAddTap != null) ...[
-            SizedBox(width: spec.recentsGap),
-            _AddChip(onTap: onAddTap!, tokens: tokens, spec: spec),
-          ],
         ],
       ),
     );
@@ -137,7 +130,7 @@ class _Chip extends StatelessWidget {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
+                      color: Colors.black.withValues(alpha: 0.22),
                       offset: const Offset(0, -2),
                       spreadRadius: 0,
                       blurRadius: 0,
@@ -155,7 +148,7 @@ class _Chip extends StatelessWidget {
                   height: spec.avatarSize,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.22),
+                    color: Colors.black.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(spec.avatarRadius),
                   ),
                   child: Text(
@@ -197,116 +190,4 @@ class _Chip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _AddChip extends StatelessWidget {
-  final VoidCallback onTap;
-  final BookingTokens tokens;
-  final BookingDensitySpec spec;
-  const _AddChip({required this.onTap, required this.tokens, required this.spec});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(spec.chipRadius),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(spec.chipRadius),
-        child: DottedBorder(
-          color: tokens.line2,
-          borderWidth: spec.addChipBorderWidth,
-          radius: spec.chipRadius,
-          child: SizedBox(
-            width: spec.addChipSize,
-            height: spec.addChipSize,
-            child: Center(
-              child: Text(
-                '+',
-                style: TextStyle(
-                  color: tokens.ink2,
-                  fontSize: spec.addChipGlyphSize,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Lightweight dashed-border wrapper. Renders a rounded rectangle with a
-/// dashed stroke. Used by the recents-strip "+" chip.
-class DottedBorder extends StatelessWidget {
-  final Widget child;
-  final Color color;
-  final double borderWidth;
-  final double radius;
-
-  const DottedBorder({
-    super.key,
-    required this.child,
-    required this.color,
-    required this.borderWidth,
-    required this.radius,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _DashedRRectPainter(
-        color: color,
-        strokeWidth: borderWidth,
-        radius: radius,
-      ),
-      child: child,
-    );
-  }
-}
-
-class _DashedRRectPainter extends CustomPainter {
-  final Color color;
-  final double strokeWidth;
-  final double radius;
-  _DashedRRectPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.radius,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke;
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(
-      rect.deflate(strokeWidth / 2),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    final dashed = _dashPath(path, dashLength: 4, gapLength: 3);
-    canvas.drawPath(dashed, paint);
-  }
-
-  Path _dashPath(Path src, {required double dashLength, required double gapLength}) {
-    final dest = Path();
-    for (final metric in src.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final end = (distance + dashLength).clamp(0, metric.length).toDouble();
-        dest.addPath(metric.extractPath(distance, end), Offset.zero);
-        distance = end + gapLength;
-      }
-    }
-    return dest;
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRRectPainter old) =>
-      old.color != color || old.strokeWidth != strokeWidth || old.radius != radius;
 }

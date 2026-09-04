@@ -121,7 +121,12 @@ class Settings:
             except ZoneInfoNotFoundError as error:
                 raise ConfigurationError(f"NVR_TIME_ZONE is not a valid IANA zone: {timezone_name}") from error
 
-        ttl = integer("SIGNED_URL_TTL_SECONDS", 43_200, minimum=60, maximum=604_800)
+        signed_url_ttl = integer(
+            "SIGNED_URL_TTL_SECONDS",
+            604_800,
+            minimum=60,
+            maximum=604_800,
+        )
         lease = integer("PROCESSING_LEASE_SECONDS", 900, minimum=60, maximum=3_600)
         return cls(
             video_clip_bucket=required("VIDEO_CLIP_BUCKET"),
@@ -147,7 +152,7 @@ class Settings:
             max_output_bytes=integer("MAX_OUTPUT_BYTES", 250_000_000, minimum=1_000_000),
             max_clip_seconds=integer("MAX_CLIP_SECONDS", 60, minimum=1, maximum=600),
             ffmpeg_timeout_seconds=integer("FFMPEG_TIMEOUT_SECONDS", 600, minimum=30, maximum=1_800),
-            signed_url_ttl_seconds=ttl,
+            signed_url_ttl_seconds=signed_url_ttl,
             signed_url_service_account_email=_optional_secret(
                 values.get("SIGNED_URL_SERVICE_ACCOUNT_EMAIL"),
             ),

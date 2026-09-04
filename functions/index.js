@@ -4,6 +4,12 @@ const {defineSecret} = require("firebase-functions/params");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
+const {
+  createManagerVideoAccessReissuer,
+  createOpenVideoClipHandler,
+} = require("./src/video/access");
+const {getVideoAccessSettings} = require("./src/video/config");
 const {
   createEspHttpHandler,
   processManagerVideoRequest,
@@ -15,6 +21,8 @@ setGlobalOptions({region: "europe-west3", maxInstances: 10});
 
 const USERS_COLLECTION = "users_2024";
 const esp32VideoDeviceKeys = defineSecret("ESP32_VIDEO_DEVICE_KEYS");
+const VIDEO_ACCESS_SERVICE_ACCOUNT =
+  "video-access-runtime@potent-howl-228108.iam.gserviceaccount.com";
 const MANAGER_NAMES = new Set([
   "אודי אש",
   "רני לפלר",
@@ -172,3 +180,78 @@ exports.requestVideoClipForManager = onCall({
     throw callableVideoError(error);
   }
 });
+
+let cachedVideoAccessHandlers;
+
+function getVideoAccessHandlers() {
+  if (cachedVideoAccessHandlers) return cachedVideoAccessHandlers;
+  const settings = getVideoAccessSettings();
+  const bucket = getStorage().bucket(settings.videoClipBucket);
+  cachedVideoAccessHandlers = {
+    open: createOpenVideoClipHandler({
+      db: getFirestore(),
+      bucket,
+      signedUrlTtlSeconds: settings.signedUrlTtlSeconds,
+    }),
+    reissue: createManagerVideoAccessReissuer({
+      db: getFirestore(),
+      bucket,
+      assertManager,
+      publicBaseUrl: settings.publicBaseUrl,
+      accessTtlSeconds: settings.accessTtlSeconds,
+    }),
+  };
+  return cachedVideoAccessHandlers;
+}
+
+async function openVideoClipEntrypoint(request, response) {
+  try {
+    return await getVideoAccessHandlers().open(request, response);
+  } catch (error) {
+    const code = isVideoRequestError(error) ? error.code : "internal_error";
+    console.error("Video access initialization failed", {code});
+    if (!response.headersSent) {
+      response.status(503).send("Video access is temporarily unavailable.");
+    }
+  }
+}
+
+async function regenerateVideoClipAccessEntrypoint(request) {
+  try {
+    return await getVideoAccessHandlers().reissue(request);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    const code = isVideoRequestError(error) ? error.code : "internal_error";
+    console.error("Manager video access initialization failed", {code});
+    if (isVideoRequestError(error)) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Video access is not configured",
+      );
+    }
+    throw new HttpsError("internal", "Video access request failed");
+  }
+}
+
+/**
+ * Public bearer-token resolver. The emailed raw token remains in the browser
+ * fragment and reaches this handler only in a POST body, keeping it out of
+ * automatic request-URL logs. The bucket itself remains private.
+ */
+exports.openVideoClip = onRequest({
+  region: "europe-west3",
+  cors: false,
+  timeoutSeconds: 30,
+  invoker: "public",
+  serviceAccount: VIDEO_ACCESS_SERVICE_ACCOUNT,
+}, openVideoClipEntrypoint);
+
+/**
+ * Manager-only recovery for an already stored MP4. It creates another stable
+ * token hash without enqueuing Cloud Tasks or contacting the NVR.
+ */
+exports.regenerateVideoClipAccessForManager = onCall({
+  region: "europe-west3",
+  timeoutSeconds: 30,
+  serviceAccount: VIDEO_ACCESS_SERVICE_ACCOUNT,
+}, regenerateVideoClipAccessEntrypoint);

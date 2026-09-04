@@ -31,6 +31,22 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ConfigurationError, "unique"):
             Settings.from_env(settings_env(COURT_CAMERA_MAP="1:4,2:4"))
 
+    def test_direct_signed_links_default_to_seven_days(self) -> None:
+        values = settings_env()
+        values.pop("SIGNED_URL_TTL_SECONDS")
+
+        configured = Settings.from_env(values)
+
+        self.assertEqual(configured.signed_url_ttl_seconds, 604_800)
+        self.assertEqual(
+            configured.signed_url_service_account_email,
+            "video-processor-runtime@unit-test-project.iam.gserviceaccount.com",
+        )
+
+    def test_direct_signed_link_ttl_cannot_exceed_seven_days(self) -> None:
+        with self.assertRaisesRegex(ConfigurationError, "SIGNED_URL_TTL_SECONDS"):
+            Settings.from_env(settings_env(SIGNED_URL_TTL_SECONDS="604801"))
+
 
 if __name__ == "__main__":
     unittest.main()

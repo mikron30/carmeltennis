@@ -62,7 +62,8 @@ function buildQueuedJob({
     failureCode: null,
     failureMessage: null,
     storageObject: null,
-    linkExpiresAt: null,
+    accessTokenHashes: [],
+    accessExpiresAt: null,
   };
 
   if (requestKind === "esp32") {
@@ -72,6 +73,9 @@ function buildQueuedJob({
       documentIds: reservation.documentIds,
       userName: reservation.userName,
       partner: reservation.partner,
+      slotDate: reservation.slotDate,
+      slotHour: reservation.slotHour,
+      selectionSource: reservation.selectionSource,
     };
   }
   if (requestKind === "manager") {

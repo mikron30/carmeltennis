@@ -280,14 +280,18 @@ def _select_playback_match(
             continue
         if candidate.segment_start <= clip_start and candidate.segment_end >= clip_end:
             return candidate
-    for candidate in candidates:
-        if candidate.segment_start is None or candidate.segment_end is None:
-            continue
-        if candidate.segment_start < clip_end and candidate.segment_end > clip_start:
-            return candidate
     # A playback URI returned for the exact requested range is generally already
     # trimmed by the NVR. Use it when the firmware did not include segment bounds.
-    return next((candidate for candidate in candidates if candidate.segment_start is None), None)
+    # A bounded segment must cover the complete interval; accepting only an
+    # overlap can silently shift the output later than the button press.
+    return next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.segment_start is None and candidate.segment_end is None
+        ),
+        None,
+    )
 
 
 def _elements_named(parent: object, name: str) -> Iterable[object]:

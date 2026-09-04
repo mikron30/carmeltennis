@@ -38,6 +38,10 @@ async function enqueueVideoProcessing({
   const body = Buffer.from(JSON.stringify({requestId}), "utf8");
   const task = {
     name: taskName,
+    // Cloud Tasks otherwise defaults HTTP dispatches to 10 minutes. Keep its
+    // deadline slightly beyond the processor's 900-second request timeout so
+    // a long FFmpeg job cannot be retried while its first invocation is alive.
+    dispatchDeadline: {seconds: 930},
     httpRequest: {
       httpMethod: "POST",
       url: `${taskConfig.processorUrl}/tasks/process-video`,

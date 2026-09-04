@@ -44,7 +44,7 @@ class HikvisionSearchTest(unittest.TestCase):
 
         self.assertIn("<playbackURI>rtsp://nvr/track?start=1&amp;end=2</playbackURI>", xml)
 
-    def test_finds_nested_playback_uri_and_overlapping_segment(self) -> None:
+    def test_finds_nested_playback_uri_and_covering_segment(self) -> None:
         matches = _parse_search_result(SEARCH_RESPONSE)
         chosen = _select_playback_match(
             matches,
@@ -56,6 +56,17 @@ class HikvisionSearchTest(unittest.TestCase):
         self.assertIsNotNone(chosen)
         self.assertTrue(chosen.playback_uri.startswith("rtsp://"))  # type: ignore[union-attr]
         self.assertEqual(chosen.segment_start, datetime(2026, 8, 4, 9, 0, tzinfo=UTC))  # type: ignore[union-attr]
+
+    def test_rejects_segment_that_only_partially_overlaps_interval(self) -> None:
+        matches = _parse_search_result(SEARCH_RESPONSE)
+
+        chosen = _select_playback_match(
+            matches,
+            datetime(2026, 8, 4, 8, 59, 55, tzinfo=UTC),
+            datetime(2026, 8, 4, 9, 0, 5, tzinfo=UTC),
+        )
+
+        self.assertIsNone(chosen)
 
     def test_parses_mislabelled_z_timestamp_as_configured_local_time(self) -> None:
         matches = _parse_search_result(

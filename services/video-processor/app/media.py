@@ -14,6 +14,9 @@ from .errors import MediaProcessingError
 from .hikvision import RecordingDownload
 
 
+OUTPUT_DURATION_TOLERANCE_SECONDS = 0.5
+
+
 @dataclass(frozen=True)
 class ProcessedClip:
     path: Path
@@ -91,6 +94,10 @@ class MediaProcessor:
         actual_duration = self._probe_duration(destination)
         if actual_duration <= 0:
             raise MediaProcessingError("The converted MP4 has no playable duration.")
+        if abs(actual_duration - duration_seconds) > OUTPUT_DURATION_TOLERANCE_SECONDS:
+            raise MediaProcessingError(
+                "The converted MP4 duration does not match the requested interval.",
+            )
         return ProcessedClip(destination, bytes_written, actual_duration)
 
     def ffmpeg_command(

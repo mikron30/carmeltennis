@@ -6,6 +6,8 @@ from app.config import Settings
 def settings_env(**overrides: str) -> dict[str, str]:
     values = {
         "VIDEO_CLIP_BUCKET": "unit-test-video-bucket",
+        "SIGNED_URL_TTL_SECONDS": "604800",
+        "SIGNED_URL_SERVICE_ACCOUNT_EMAIL": "video-processor-runtime@unit-test-project.iam.gserviceaccount.com",
         "GOOGLE_CLOUD_PROJECT": "unit-test-project",
         "NVR_BASE_URL": "https://nvr.example.invalid:8443",
         "NVR_USERNAME": "test-user",

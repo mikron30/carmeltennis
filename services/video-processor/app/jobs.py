@@ -189,6 +189,7 @@ class FirestoreVideoJobRepository:
         camera_channel: int,
         url_expires_at: datetime,
     ) -> None:
+        expires_at = as_utc_datetime(url_expires_at, "linkExpiresAt")
         self._update(
             request_id,
             {
@@ -196,9 +197,9 @@ class FirestoreVideoJobRepository:
                 "clipBytes": clip_bytes,
                 "clipDurationSeconds": round(clip_duration_seconds, 3),
                 "cameraChannel": camera_channel,
-                # Deliberately save expiry metadata only. A signed URL is a bearer
-                # credential and must never be put in Firestore or application logs.
-                "linkExpiresAt": url_expires_at,
+                # The direct signed URL is a bearer credential and is deliberately
+                # kept out of Firestore and application logs.
+                "linkExpiresAt": expires_at,
                 "updatedAt": self._clock.now(),
             },
         )

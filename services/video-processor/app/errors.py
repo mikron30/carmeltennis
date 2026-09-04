@@ -60,10 +60,13 @@ class StorageOperationError(TransientProcessingError):
     code = "storage_operation_failed"
 
 
+class VideoAccessExpiredError(PermanentProcessingError):
+    code = "video_access_expired"
+
+
 class MailDeliveryError(TransientProcessingError):
     code = "mail_delivery_failed"
 
 
 class MailConfigurationError(PermanentProcessingError):
     code = "mail_configuration_failed"
-

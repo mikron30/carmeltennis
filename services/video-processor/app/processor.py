@@ -121,7 +121,7 @@ class VideoProcessor:
                     destination=temporary_path / "court-video.mp4",
                 )
                 stored_clip = self._storage.upload(request_id, mp4.path)
-                signed_download = self._storage.create_download(stored_clip.object_name)
+                signed_download = self._storage.create_download(stored_clip)
                 self._repository.record_artifact(
                     request_id,
                     object_name=stored_clip.object_name,
@@ -129,6 +129,15 @@ class VideoProcessor:
                     clip_duration_seconds=mp4.duration_seconds,
                     camera_channel=job.camera.channel,
                     url_expires_at=signed_download.expires_at,
+                )
+                LOGGER.info(
+                    "video_artifact_ready request_id=%s court_number=%s "
+                    "camera_channel=%s object_name=%s output_duration_seconds=%.3f",
+                    request_id,
+                    job.court_number,
+                    job.camera.channel,
+                    stored_clip.object_name,
+                    mp4.duration_seconds,
                 )
                 delivered = self._repository.delivered_recipient_keys(claim.job)
                 for recipient in job.recipients:

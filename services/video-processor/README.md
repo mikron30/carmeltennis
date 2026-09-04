@@ -36,15 +36,19 @@ the manager.
 }
 ```
 
-`clipStart` and `clipEnd` are authoritative timestamps produced by the server;
-the worker falls back to a ten-second `clipStart` only for an older job shape.
+`clipStart` and `clipEnd` are authoritative timestamps produced by the server.
+New physical-button jobs request 40 seconds and manager jobs request 10
+seconds. The worker falls back to a ten-second `clipStart` only for an older
+job shape that omitted the explicit start.
 It validates the configured court-to-camera mapping rather than trusting the
 document's camera channel.
 
 State transitions are `queued → processing → sent`; a non-retryable problem is
 recorded as `failed`. Transient NVR, Storage, and mail errors return the job to
 `queued` and return HTTP 503 so Cloud Tasks retries. The request document stores
-object metadata and signed-link expiry only—not a signed URL.
+object metadata and `linkExpiresAt`. The direct V4 Storage URL is kept only in
+memory long enough to send the email; it is never stored in Firestore or written
+to application logs.
 
 ## Local setup and tests
 
@@ -96,10 +100,13 @@ delivery to make crashes between delivery and Firestore acknowledgement safe.
   `MAIL_SERVICE_BEARER_TOKEN` from Secret Manager to Cloud Run environment
   variables. Do not use `.env` or `gcloud --set-env-vars` for secrets.
 - Keep the clip bucket private with uniform bucket-level access. The worker
-  generates V4 download URLs for at most 12 hours by default.
+  emails a direct V4 signed Storage URL whose expiry is capped at seven days
+  from the object's creation time.
 - The worker service account needs Firestore access, write/read access only to
   the dedicated video bucket, Secret Manager accessor for bound secrets, and
-  `iam.serviceAccounts.signBlob` (usually via `roles/iam.serviceAccountTokenCreator`)
-  for V4 URLs.
-- Configure bucket lifecycle deletion (for example after seven days). This
-  service intentionally does not delete user data on its own.
+  `roles/iam.serviceAccountTokenCreator` on itself for keyless URL signing.
+- Apply [`storage-lifecycle.json`](storage-lifecycle.json) to the dedicated
+  bucket so live MP4 clips are deleted after seven days. Lifecycle processing is
+  asynchronous, and the bucket's separate soft-delete policy controls the
+  recovery window after deletion. This service intentionally does not delete
+  user data on its own.

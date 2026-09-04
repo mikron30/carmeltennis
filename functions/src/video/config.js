@@ -12,9 +12,12 @@ const DEFAULTS = Object.freeze({
   taskDelaySeconds: 15,
   taskLocation: "europe-west3",
   taskQueue: "video-clip-processor",
-  rateLimitSeconds: 30,
+  rateLimitSeconds: 60,
   timestampToleranceSeconds: 90,
+  buttonClipDurationSeconds: 40,
   clipLeadSeconds: 10,
+  accessTtlSeconds: 604800,
+  signedUrlTtlSeconds: 900,
 });
 
 function requireCourt(courtNumber) {
@@ -95,6 +98,11 @@ function getTaskConfig(env = process.env) {
 
 function getIngressSettings(env = process.env) {
   return {
+    buttonClipDurationSeconds: positiveInteger(
+        env.VIDEO_BUTTON_CLIP_DURATION_SECONDS,
+        DEFAULTS.buttonClipDurationSeconds,
+        "VIDEO_BUTTON_CLIP_DURATION_SECONDS",
+    ),
     clipLeadSeconds: positiveInteger(
         env.VIDEO_CLIP_LEAD_SECONDS,
         DEFAULTS.clipLeadSeconds,
@@ -113,11 +121,61 @@ function getIngressSettings(env = process.env) {
   };
 }
 
+function getVideoAccessSettings(env = process.env) {
+  const videoClipBucket = String(env.VIDEO_CLIP_BUCKET || "").trim();
+  if (!/^[a-z0-9][a-z0-9._-]{1,221}[a-z0-9]$/.test(videoClipBucket)) {
+    throw new VideoConfigurationError("VIDEO_CLIP_BUCKET is invalid");
+  }
+
+  let publicBaseUrl;
+  try {
+    publicBaseUrl = new URL(String(env.VIDEO_PUBLIC_BASE_URL || "").trim());
+  } catch (_) {
+    throw new VideoConfigurationError(
+        "VIDEO_PUBLIC_BASE_URL must be an absolute HTTPS URL",
+    );
+  }
+  if (publicBaseUrl.protocol !== "https:" || publicBaseUrl.username ||
+      publicBaseUrl.password || publicBaseUrl.search || publicBaseUrl.hash) {
+    throw new VideoConfigurationError(
+        "VIDEO_PUBLIC_BASE_URL must be HTTPS without credentials, query, or fragment",
+    );
+  }
+
+  const accessTtlSeconds = positiveInteger(
+      env.VIDEO_ACCESS_TTL_SECONDS,
+      DEFAULTS.accessTtlSeconds,
+      "VIDEO_ACCESS_TTL_SECONDS",
+  );
+  if (accessTtlSeconds > DEFAULTS.accessTtlSeconds) {
+    throw new VideoConfigurationError(
+        "VIDEO_ACCESS_TTL_SECONDS cannot exceed seven days",
+    );
+  }
+  const signedUrlTtlSeconds = positiveInteger(
+      env.VIDEO_SIGNED_URL_TTL_SECONDS,
+      DEFAULTS.signedUrlTtlSeconds,
+      "VIDEO_SIGNED_URL_TTL_SECONDS",
+  );
+  if (signedUrlTtlSeconds < 60 || signedUrlTtlSeconds > 3600) {
+    throw new VideoConfigurationError(
+        "VIDEO_SIGNED_URL_TTL_SECONDS must be between 60 and 3600 seconds",
+    );
+  }
+  return {
+    accessTtlSeconds,
+    publicBaseUrl: publicBaseUrl.toString(),
+    signedUrlTtlSeconds,
+    videoClipBucket,
+  };
+}
+
 module.exports = {
   COURTS,
   DEFAULTS,
   getIngressSettings,
   getProjectId,
   getTaskConfig,
+  getVideoAccessSettings,
   requireCourt,
 };
