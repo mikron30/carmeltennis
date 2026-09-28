@@ -404,10 +404,21 @@ class FirebaseUserClient:
                 return documents
 
 
+def _quoted_field_path(field_path: str) -> str:
+    if field_path.replace("_", "").isalnum() and field_path[:1].isalpha():
+        try:
+            field_path.encode("ascii")
+            return field_path
+        except UnicodeEncodeError:
+            pass
+    escaped = field_path.replace("\\", "\\\\").replace("`", "\\`")
+    return f"`{escaped}`"
+
+
 def _field_filter(field_path: str, op: str, value: dict) -> dict:
     return {
         "fieldFilter": {
-            "field": {"fieldPath": field_path},
+            "field": {"fieldPath": _quoted_field_path(field_path)},
             "op": op,
             "value": value,
         }
