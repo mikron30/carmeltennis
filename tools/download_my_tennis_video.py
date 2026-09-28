@@ -224,10 +224,50 @@ def _firestore_value(value: dict) -> object:
 
 
 def _document_fields(document: dict) -> dict[str, object]:
+    if not isinstance(document, dict):
+        raise RuntimeError(
+            f"Unexpected Firestore document type: {type(document).__name__}"
+        )
+    fields = document.get("fields") or {}
+    if not isinstance(fields, dict):
+        raise RuntimeError(
+            f"Unexpected Firestore fields type: {type(fields).__name__}"
+        )
     return {
         field_name: _firestore_value(field_value)
-        for field_name, field_value in (document.get("fields") or {}).items()
+        for field_name, field_value in fields.items()
     }
+
+
+def _api_error_message(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return f"HTTP {response.status_code}"
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if message:
+                return str(message)
+        if isinstance(error, str):
+            return error
+        message = payload.get("message")
+        if message:
+            return str(message)
+
+    if isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            error = item.get("error")
+            if isinstance(error, dict) and error.get("message"):
+                return str(error["message"])
+            if isinstance(error, str):
+                return error
+
+    return f"HTTP {response.status_code}: unexpected JSON response"
 
 
 class FirebaseUserClient:
@@ -273,11 +313,7 @@ class FirebaseUserClient:
         except ValueError:
             payload = {}
         if response.status_code >= 400:
-            code = (
-                payload.get("error", {}).get("message")
-                if isinstance(payload, dict)
-                else None
-            ) or f"HTTP {response.status_code}"
+            code = _api_error_message(response)
             friendly = {
                 "INVALID_LOGIN_CREDENTIALS": "email or password is incorrect",
                 "EMAIL_NOT_FOUND": "email was not found in Firebase Authentication",
@@ -309,20 +345,22 @@ class FirebaseUserClient:
             timeout=60,
         )
         if response.status_code >= 400:
-            try:
-                detail = response.json().get("error", {}).get("message")
-            except ValueError:
-                detail = None
             raise RuntimeError(
-                "Firestore query failed"
-                + (f": {detail}" if detail else f" (HTTP {response.status_code})")
+                f"Firestore query failed: {_api_error_message(response)}"
             )
 
         rows = response.json()
+        if isinstance(rows, dict):
+            rows = [rows]
+        if not isinstance(rows, list):
+            raise RuntimeError(
+                f"Unexpected Firestore query response type: {type(rows).__name__}"
+            )
         return [
             _document_fields(row["document"])
             for row in rows
-            if isinstance(row, dict) and "document" in row
+            if isinstance(row, dict)
+            and isinstance(row.get("document"), dict)
         ]
 
     def list_collection(self, collection: str) -> list[dict]:
@@ -339,20 +377,29 @@ class FirebaseUserClient:
                 timeout=60,
             )
             if response.status_code >= 400:
-                try:
-                    detail = response.json().get("error", {}).get("message")
-                except ValueError:
-                    detail = None
                 raise RuntimeError(
-                    "Firestore read failed"
-                    + (f": {detail}" if detail else f" (HTTP {response.status_code})")
+                    f"Firestore read failed: {_api_error_message(response)}"
                 )
             payload = response.json()
+            if isinstance(payload, list):
+                raw_documents = [
+                    item.get("document", item)
+                    for item in payload
+                    if isinstance(item, dict)
+                ]
+                page_token = ""
+            elif isinstance(payload, dict):
+                raw_documents = payload.get("documents", [])
+                page_token = str(payload.get("nextPageToken", "") or "")
+            else:
+                raise RuntimeError(
+                    f"Unexpected Firestore read response type: {type(payload).__name__}"
+                )
             documents.extend(
                 _document_fields(document)
-                for document in payload.get("documents", [])
+                for document in raw_documents
+                if isinstance(document, dict)
             )
-            page_token = str(payload.get("nextPageToken", "") or "")
             if not page_token:
                 return documents
 
@@ -380,13 +427,6 @@ def resolve_player_name(
         users_collection,
         _field_filter(EMAIL_FIELD, "EQUAL", {"stringValue": email.strip()}),
     )
-
-    if not documents:
-        documents = [
-            data
-            for data in db.list_collection(users_collection)
-            if normalize_email(data.get(EMAIL_FIELD)) == normalized_target
-        ]
 
     if not documents:
         raise LookupError(f"No user in {users_collection} matches {email}.")
