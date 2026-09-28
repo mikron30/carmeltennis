@@ -854,6 +854,20 @@ def select_overlapping_matches(
     return unbounded[:1]
 
 
+def print_nvr_matches(matches: list[PlaybackMatch]) -> None:
+    if not matches:
+        print("NVR search returned 0 recording segments.")
+        return
+    print(f"NVR search returned {len(matches)} recording segment(s):")
+    for index, match in enumerate(matches[:10], start=1):
+        print(
+            f"  {index}. start={match.segment_start or 'unknown'} "
+            f"end={match.segment_end or 'unknown'}"
+        )
+    if len(matches) > 10:
+        print(f"  ... and {len(matches) - 10} more")
+
+
 def run_ffmpeg(args: list[str], timeout_seconds: int = 7200) -> None:
     try:
         result = subprocess.run(
@@ -1026,7 +1040,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--search-results-are-local-time",
         action="store_true",
-        default=parse_bool(os.getenv("NVR_SEARCH_RESULTS_ARE_LOCAL_TIME"), False),
+        default=parse_bool(os.getenv("NVR_SEARCH_RESULTS_ARE_LOCAL_TIME"), True),
+        help=(
+            "Treat Hikvision search-result timestamps ending in Z as Israel "
+            "wall-clock time. Enabled by default for the club DS-7608NXI."
+        ),
     )
     parser.add_argument(
         "--max-download-bytes",
@@ -1208,8 +1226,43 @@ def main() -> int:
 
         save_password("nvr", nvr_user, nvr_password)
         selected_matches = select_overlapping_matches(matches, clip_start, clip_end)
+
+        if not selected_matches and matches:
+            print_nvr_matches(matches)
+            print("Retrying with alternate Hikvision timestamp interpretation...")
+            alternate_downloader = HikvisionDownloader(
+                base_url=nvr_url,
+                username=nvr_user,
+                password=nvr_password,
+                time_zone=time_zone,
+                track_suffix=args.track_suffix,
+                search_path=os.getenv("NVR_SEARCH_PATH", DEFAULT_SEARCH_PATH),
+                download_path=os.getenv("NVR_DOWNLOAD_PATH", DEFAULT_DOWNLOAD_PATH),
+                verify_tls=parse_verify_tls(args.verify_tls),
+                search_results_are_local_time=not args.search_results_are_local_time,
+                max_download_bytes=args.max_download_bytes,
+            )
+            alternate_matches = alternate_downloader.search(
+                camera_channel=camera.channel,
+                clip_start=clip_start,
+                clip_end=clip_end,
+            )
+            alternate_selected = select_overlapping_matches(
+                alternate_matches,
+                clip_start,
+                clip_end,
+            )
+            if alternate_selected:
+                downloader = alternate_downloader
+                matches = alternate_matches
+                selected_matches = alternate_selected
+                print("Alternate timestamp interpretation matched the reservation.")
+
         if not selected_matches:
-            raise LookupError("No NVR recording overlaps the selected reservation hour.")
+            print_nvr_matches(matches)
+            raise LookupError(
+                "No NVR recording overlaps the selected reservation hour."
+            )
 
         print(f"Found {len(selected_matches)} NVR recording segment(s).")
 
