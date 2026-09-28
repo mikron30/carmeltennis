@@ -197,13 +197,11 @@ def resolve_email(cli_email: str | None) -> str:
 
     candidate = git_config_email()
     if candidate:
-        answer = input(
-            f"Carmel Tennis account email [{candidate}]: "
-        ).strip()
-        email = answer or candidate
-    else:
-        email = input("Carmel Tennis account email: ").strip()
+        print(f"Using Git email for Carmel Tennis: {candidate}")
+        save_local_email(candidate)
+        return candidate
 
+    email = input("Carmel Tennis account email: ").strip()
     if email:
         save_local_email(email)
     return email
