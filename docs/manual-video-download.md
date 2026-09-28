@@ -53,8 +53,8 @@ $env:NVR_SEARCH_RESULTS_ARE_LOCAL_TIME="true"
 py tools\download_my_tennis_video.py --email "your-account@example.com"
 ```
 
-By default the script shows matching reservations from the last 30 days and
-the next 7 days. For one exact date:
+By default the script shows matching reservations from **today and yesterday only**.
+For one exact date:
 
 ```powershell
 py tools\download_my_tennis_video.py --email "your-account@example.com" --date 2026-09-27
