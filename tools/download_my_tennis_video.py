@@ -639,8 +639,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--users-collection", default=DEFAULT_USERS_COLLECTION)
     parser.add_argument("--reservations-collection", default=DEFAULT_RESERVATIONS_COLLECTION)
     parser.add_argument("--date", help="Limit choices to one date: YYYY-MM-DD.")
-    parser.add_argument("--days-back", type=int, default=30)
-    parser.add_argument("--days-forward", type=int, default=7)
+    parser.add_argument("--days-back", type=int, default=1)
+    parser.add_argument("--days-forward", type=int, default=0)
     parser.add_argument(
         "--output-dir",
         type=Path,
