@@ -1,11 +1,11 @@
 # Manual video download from my reservations
 
-This utility is intended for an authorized club operator who already has
-Firestore and NVR access.
+This utility lets an authorized Carmel Tennis user choose one of their own
+reservations and download the matching Hikvision recording.
 
-It resolves a player from `users_2024`, lists only reservations where that
-player appears as `userName` or `partner`, lets the operator choose a slot,
-then downloads the matching Hikvision recording for the mapped court.
+It signs in to Firebase with the same email/password used by the app, reads
+`users_2024` and `reservations`, then downloads the selected court/hour from
+the NVR.
 
 ## Install
 
@@ -13,20 +13,23 @@ then downloads the matching Hikvision recording for the mapped court.
 py -m pip install -r requirements-video-download.txt
 ```
 
-Install FFmpeg separately and make sure both `ffmpeg` and `ffprobe` are in
-`PATH`.
+Install FFmpeg separately and make sure `ffmpeg` is in `PATH`.
 
-## Firebase authentication
+## Firebase login
 
-Use either a service-account file:
+No service-account JSON, ADC, or `gcloud auth application-default login` is
+required.
 
-```powershell
-$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\service-account.json"
+On the first run, enter the Carmel Tennis account email. The script saves only
+that email in:
+
+```text
+%USERPROFILE%\.carmeltennis_video.json
 ```
 
-or Application Default Credentials.
+On later runs the saved email is used automatically.
 
-Never commit the service-account JSON.
+The Carmel Tennis password is requested securely each run and is **not saved**.
 
 ## NVR settings
 
@@ -40,8 +43,7 @@ $env:NVR_TIME_ZONE="Asia/Jerusalem"
 $env:COURT_CAMERA_MAP="1:4:Left Court,2:6:Right Court,3:7:Back Court"
 ```
 
-If the specific NVR returns Israel wall-clock timestamps with a literal `Z`,
-also set:
+If the NVR returns Israel wall-clock timestamps with a literal `Z`, also set:
 
 ```powershell
 $env:NVR_SEARCH_RESULTS_ARE_LOCAL_TIME="true"
@@ -50,20 +52,21 @@ $env:NVR_SEARCH_RESULTS_ARE_LOCAL_TIME="true"
 ## Run
 
 ```powershell
-py tools\download_my_tennis_video.py --email "your-account@example.com"
+py tools\download_my_tennis_video.py
 ```
 
-By default the script shows matching reservations from **today and yesterday only**.
+By default the script shows reservations from **today and yesterday only**.
+
 For one exact date:
 
 ```powershell
-py tools\download_my_tennis_video.py --email "your-account@example.com" --date 2026-09-27
+py tools\download_my_tennis_video.py --date 2026-09-27
 ```
 
 For older recordings:
 
 ```powershell
-py tools\download_my_tennis_video.py --email "your-account@example.com" --days-back 120
+py tools\download_my_tennis_video.py --days-back 120
 ```
 
 The output is written to `downloaded_tennis_videos`.
