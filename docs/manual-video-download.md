@@ -29,16 +29,16 @@ that email in:
 
 On later runs the saved email is used automatically.
 
-The Carmel Tennis password is requested securely each run and is **not saved**.
+The Carmel Tennis password is requested once and then stored securely in Windows Credential Manager. The NVR password is handled the same way after the first successful NVR connection.
 
 ## NVR settings
 
 Set the same values used by the video processor:
 
 ```powershell
-$env:NVR_BASE_URL="https://nvr-host:port"
-$env:NVR_USERNAME="..."
-$env:NVR_PASSWORD="..."
+$env:NVR_BASE_URL="http://109.67.172.30:8080"
+$env:NVR_USERNAME="admin"
+# NVR_PASSWORD is optional; if omitted, it is requested once and saved securely.
 $env:NVR_TIME_ZONE="Asia/Jerusalem"
 $env:COURT_CAMERA_MAP="1:4:Left Court,2:6:Right Court,3:7:Back Court"
 ```
