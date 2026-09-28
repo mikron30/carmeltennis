@@ -9,14 +9,15 @@ The script:
 5. Searches Hikvision ISAPI recording segments, downloads them, and joins the
    requested reservation hour into one MP4.
 
-Secrets are read from command-line options, environment variables, ADC, or
-interactive password input. Nothing sensitive is committed to the repository.
+The user's email is remembered locally after the first run. Firebase and NVR
+passwords are requested interactively and are never written to disk.
 """
 
 from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import os
 import shutil
 import subprocess
@@ -32,13 +33,12 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import firebase_admin
-from firebase_admin import credentials, firestore
 import requests
 from requests.auth import HTTPDigestAuth
 
 
 DEFAULT_PROJECT_ID = "potent-howl-228108"
+DEFAULT_FIREBASE_API_KEY = "AIzaSyBRFzwULCldAPvEoCl9Oe7pbSZ2P9VIUeo"
 DEFAULT_USERS_COLLECTION = "users_2024"
 DEFAULT_RESERVATIONS_COLLECTION = "reservations"
 DEFAULT_TIME_ZONE = "Asia/Jerusalem"
@@ -130,42 +130,264 @@ def resolve_time_zone(value: str) -> ZoneInfo:
         ) from error
 
 
-def initialize_firebase(project_id: str, credentials_path: Path | None):
-    options = {"projectId": project_id}
-    if credentials_path is not None:
-        if not credentials_path.is_file():
-            raise FileNotFoundError(
-                f"Firebase service-account file does not exist: {credentials_path}"
+CONFIG_PATH = Path.home() / ".carmeltennis_video.json"
+
+
+def load_local_config() -> dict[str, str]:
+    try:
+        if CONFIG_PATH.is_file():
+            payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                return {
+                    str(key): str(value)
+                    for key, value in payload.items()
+                    if value is not None
+                }
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+def save_local_email(email: str) -> None:
+    normalized = email.strip()
+    if not normalized:
+        return
+    config = load_local_config()
+    if config.get("email") == normalized:
+        return
+    config["email"] = normalized
+    try:
+        CONFIG_PATH.write_text(
+            json.dumps(config, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as error:
+        print(f"Warning: could not save email in {CONFIG_PATH}: {error}")
+
+
+def git_config_email() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "config", "user.email"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def resolve_email(cli_email: str | None) -> str:
+    if cli_email and cli_email.strip():
+        email = cli_email.strip()
+        save_local_email(email)
+        return email
+
+    env_email = os.getenv("TENNIS_USER_EMAIL", "").strip()
+    if env_email:
+        save_local_email(env_email)
+        return env_email
+
+    saved_email = load_local_config().get("email", "").strip()
+    if saved_email:
+        print(f"Using saved Carmel Tennis email: {saved_email}")
+        return saved_email
+
+    candidate = git_config_email()
+    if candidate:
+        answer = input(
+            f"Carmel Tennis account email [{candidate}]: "
+        ).strip()
+        email = answer or candidate
+    else:
+        email = input("Carmel Tennis account email: ").strip()
+
+    if email:
+        save_local_email(email)
+    return email
+
+
+def _firestore_value(value: dict) -> object:
+    if "stringValue" in value:
+        return value["stringValue"]
+    if "integerValue" in value:
+        return int(value["integerValue"])
+    if "doubleValue" in value:
+        return float(value["doubleValue"])
+    if "booleanValue" in value:
+        return bool(value["booleanValue"])
+    if "timestampValue" in value:
+        return value["timestampValue"]
+    if "nullValue" in value:
+        return None
+    return None
+
+
+def _document_fields(document: dict) -> dict[str, object]:
+    return {
+        field_name: _firestore_value(field_value)
+        for field_name, field_value in (document.get("fields") or {}).items()
+    }
+
+
+class FirebaseUserClient:
+    """Firebase Auth + Firestore REST client using the same user account as the app."""
+
+    def __init__(
+        self,
+        *,
+        project_id: str,
+        api_key: str,
+        email: str,
+        password: str,
+    ) -> None:
+        self.project_id = project_id
+        self.api_key = api_key
+        self.email = email
+        self.session = requests.Session()
+        self.session.trust_env = False
+        self.id_token = self._sign_in(password)
+
+    @property
+    def _documents_base(self) -> str:
+        return (
+            f"https://firestore.googleapis.com/v1/projects/{self.project_id}"
+            "/databases/(default)/documents"
+        )
+
+    def _sign_in(self, password: str) -> str:
+        if not password:
+            raise ValueError("Firebase password is required.")
+        response = self.session.post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword",
+            params={"key": self.api_key},
+            json={
+                "email": self.email,
+                "password": password,
+                "returnSecureToken": True,
+            },
+            timeout=30,
+        )
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if response.status_code >= 400:
+            code = (
+                payload.get("error", {}).get("message")
+                if isinstance(payload, dict)
+                else None
+            ) or f"HTTP {response.status_code}"
+            friendly = {
+                "INVALID_LOGIN_CREDENTIALS": "email or password is incorrect",
+                "EMAIL_NOT_FOUND": "email was not found in Firebase Authentication",
+                "INVALID_PASSWORD": "password is incorrect",
+                "USER_DISABLED": "this Firebase account is disabled",
+                "TOO_MANY_ATTEMPTS_TRY_LATER": "too many login attempts; try again later",
+            }.get(code, code)
+            raise RuntimeError(f"Firebase login failed: {friendly}")
+        token = payload.get("idToken") if isinstance(payload, dict) else None
+        if not token:
+            raise RuntimeError("Firebase login did not return an ID token.")
+        return str(token)
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.id_token}"}
+
+    def run_query(self, collection: str, where: dict, *, order_by: list[dict] | None = None) -> list[dict]:
+        structured_query: dict[str, object] = {
+            "from": [{"collectionId": collection}],
+            "where": where,
+        }
+        if order_by:
+            structured_query["orderBy"] = order_by
+
+        response = self.session.post(
+            f"{self._documents_base}:runQuery",
+            headers=self._headers(),
+            json={"structuredQuery": structured_query},
+            timeout=60,
+        )
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("error", {}).get("message")
+            except ValueError:
+                detail = None
+            raise RuntimeError(
+                "Firestore query failed"
+                + (f": {detail}" if detail else f" (HTTP {response.status_code})")
             )
-        credential = credentials.Certificate(str(credentials_path))
-        return firebase_admin.initialize_app(credential, options)
 
-    # Uses GOOGLE_APPLICATION_CREDENTIALS or Application Default Credentials.
-    return firebase_admin.initialize_app(options=options)
+        rows = response.json()
+        return [
+            _document_fields(row["document"])
+            for row in rows
+            if isinstance(row, dict) and "document" in row
+        ]
+
+    def list_collection(self, collection: str) -> list[dict]:
+        documents: list[dict] = []
+        page_token = ""
+        while True:
+            params = {"pageSize": "1000"}
+            if page_token:
+                params["pageToken"] = page_token
+            response = self.session.get(
+                f"{self._documents_base}/{collection}",
+                headers=self._headers(),
+                params=params,
+                timeout=60,
+            )
+            if response.status_code >= 400:
+                try:
+                    detail = response.json().get("error", {}).get("message")
+                except ValueError:
+                    detail = None
+                raise RuntimeError(
+                    "Firestore read failed"
+                    + (f": {detail}" if detail else f" (HTTP {response.status_code})")
+                )
+            payload = response.json()
+            documents.extend(
+                _document_fields(document)
+                for document in payload.get("documents", [])
+            )
+            page_token = str(payload.get("nextPageToken", "") or "")
+            if not page_token:
+                return documents
 
 
-def resolve_player_name(db, email: str, users_collection: str) -> str:
+def _field_filter(field_path: str, op: str, value: dict) -> dict:
+    return {
+        "fieldFilter": {
+            "field": {"fieldPath": field_path},
+            "op": op,
+            "value": value,
+        }
+    }
+
+
+def resolve_player_name(
+    db: FirebaseUserClient,
+    email: str,
+    users_collection: str,
+) -> str:
     normalized_target = normalize_email(email)
     if not normalized_target:
         raise ValueError("Email cannot be empty.")
 
-    # Try the indexed exact lookup first.
-    exact = list(
-        db.collection(users_collection)
-        .where(EMAIL_FIELD, "==", email.strip())
-        .limit(2)
-        .stream()
+    documents = db.run_query(
+        users_collection,
+        _field_filter(EMAIL_FIELD, "EQUAL", {"stringValue": email.strip()}),
     )
 
-    documents = exact
     if not documents:
-        # Fall back to a case-insensitive scan because historical rows may have
-        # inconsistent email casing.
         documents = [
-            document
-            for document in db.collection(users_collection).stream()
-            if normalize_email((document.to_dict() or {}).get(EMAIL_FIELD))
-            == normalized_target
+            data
+            for data in db.list_collection(users_collection)
+            if normalize_email(data.get(EMAIL_FIELD)) == normalized_target
         ]
 
     if not documents:
@@ -173,7 +395,7 @@ def resolve_player_name(db, email: str, users_collection: str) -> str:
     if len(documents) > 1:
         raise LookupError(f"More than one user in {users_collection} matches {email}.")
 
-    data = documents[0].to_dict() or {}
+    data = documents[0]
     first_name = normalize_text(data.get(FIRST_NAME_FIELD))
     last_name = normalize_text(data.get(LAST_NAME_FIELD))
     full_name = normalize_text(f"{first_name} {last_name}")
@@ -183,24 +405,44 @@ def resolve_player_name(db, email: str, users_collection: str) -> str:
 
 
 def load_my_reservations(
-    db,
+    db: FirebaseUserClient,
     *,
     player_name: str,
     collection: str,
     start_date: str,
     end_date: str,
 ) -> list[ReservationChoice]:
-    query = (
-        db.collection(collection)
-        .where("date", ">=", start_date)
-        .where("date", "<=", end_date)
+    documents = db.run_query(
+        collection,
+        {
+            "compositeFilter": {
+                "op": "AND",
+                "filters": [
+                    _field_filter(
+                        "date",
+                        "GREATER_THAN_OR_EQUAL",
+                        {"stringValue": start_date},
+                    ),
+                    _field_filter(
+                        "date",
+                        "LESS_THAN_OR_EQUAL",
+                        {"stringValue": end_date},
+                    ),
+                ],
+            }
+        },
+        order_by=[
+            {
+                "field": {"fieldPath": "date"},
+                "direction": "DESCENDING",
+            }
+        ],
     )
 
     target = normalize_name(player_name)
     choices: dict[tuple[str, int, int, str, str], ReservationChoice] = {}
 
-    for document in query.stream():
-        data = document.to_dict() or {}
+    for data in documents:
         if data.get("isReserved") is False:
             continue
 
@@ -234,7 +476,6 @@ def load_my_reservations(
         key=lambda item: (item.date, item.hour, item.court_number),
         reverse=True,
     )
-
 
 def choose_reservation(choices: list[ReservationChoice], player_name: str) -> ReservationChoice:
     if not choices:
@@ -655,7 +896,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--email", help="Your Carmel Tennis account email.")
     parser.add_argument("--project-id", default=DEFAULT_PROJECT_ID)
-    parser.add_argument("--credentials", type=Path)
+    parser.add_argument(
+        "--firebase-api-key",
+        default=os.getenv("FIREBASE_API_KEY", DEFAULT_FIREBASE_API_KEY),
+    )
     parser.add_argument("--users-collection", default=DEFAULT_USERS_COLLECTION)
     parser.add_argument("--reservations-collection", default=DEFAULT_RESERVATIONS_COLLECTION)
     parser.add_argument("--date", help="Limit choices to one date: YYYY-MM-DD.")
@@ -710,16 +954,22 @@ def main() -> int:
         print(f"Time zone error: {error}", file=sys.stderr)
         return 2
 
-    email = args.email or os.getenv("TENNIS_USER_EMAIL") or input(
-        "Carmel Tennis account email: "
-    ).strip()
+    email = resolve_email(args.email)
     if not email:
         print("Email is required.", file=sys.stderr)
         return 2
 
+    firebase_password = os.getenv("TENNIS_FIREBASE_PASSWORD", "")
+    if not firebase_password:
+        firebase_password = getpass.getpass("Carmel Tennis password: ")
+
     try:
-        app = initialize_firebase(args.project_id, args.credentials)
-        db = firestore.client(app=app)
+        db = FirebaseUserClient(
+            project_id=args.project_id,
+            api_key=args.firebase_api_key,
+            email=email,
+            password=firebase_password,
+        )
         player_name = resolve_player_name(db, email, args.users_collection)
 
         if args.date:
