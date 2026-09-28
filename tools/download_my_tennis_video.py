@@ -9,8 +9,8 @@ The script:
 5. Searches Hikvision ISAPI recording segments, downloads them, and joins the
    requested reservation hour into one MP4.
 
-The user's email is remembered locally after the first run. Firebase and NVR
-passwords are requested interactively and are never written to disk.
+The user's email is remembered locally. Firebase and NVR passwords are stored
+securely in the operating system credential store after successful login.
 """
 
 from __future__ import annotations
@@ -33,12 +33,17 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import keyring
 import requests
+from keyring.errors import KeyringError, PasswordDeleteError
 from requests.auth import HTTPDigestAuth
 
 
 DEFAULT_PROJECT_ID = "potent-howl-228108"
 DEFAULT_FIREBASE_API_KEY = "AIzaSyBRFzwULCldAPvEoCl9Oe7pbSZ2P9VIUeo"
+DEFAULT_NVR_BASE_URL = "http://109.67.172.30:8080"
+DEFAULT_NVR_USERNAME = "admin"
+CREDENTIAL_SERVICE = "CarmelTennis Video Downloader"
 DEFAULT_USERS_COLLECTION = "users_2024"
 DEFAULT_RESERVATIONS_COLLECTION = "reservations"
 DEFAULT_TIME_ZONE = "Asia/Jerusalem"
@@ -205,6 +210,46 @@ def resolve_email(cli_email: str | None) -> str:
     if email:
         save_local_email(email)
     return email
+
+
+def _credential_account(kind: str, identity: str) -> str:
+    return f"{kind}:{identity.strip().casefold()}"
+
+
+def load_saved_password(kind: str, identity: str) -> str:
+    try:
+        return keyring.get_password(
+            CREDENTIAL_SERVICE,
+            _credential_account(kind, identity),
+        ) or ""
+    except KeyringError as error:
+        print(f"Warning: Windows Credential Manager is unavailable: {error}")
+        return ""
+
+
+def save_password(kind: str, identity: str, password: str) -> None:
+    if not password:
+        return
+    try:
+        keyring.set_password(
+            CREDENTIAL_SERVICE,
+            _credential_account(kind, identity),
+            password,
+        )
+    except KeyringError as error:
+        print(f"Warning: could not save password securely: {error}")
+
+
+def delete_saved_password(kind: str, identity: str) -> None:
+    try:
+        keyring.delete_password(
+            CREDENTIAL_SERVICE,
+            _credential_account(kind, identity),
+        )
+    except PasswordDeleteError:
+        pass
+    except KeyringError as error:
+        print(f"Warning: could not clear saved password: {error}")
 
 
 def _firestore_value(value: dict) -> object:
@@ -959,8 +1004,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("downloaded_tennis_videos"),
     )
-    parser.add_argument("--nvr-url")
-    parser.add_argument("--nvr-user")
+    parser.add_argument(
+        "--nvr-url",
+        default=os.getenv("NVR_BASE_URL", DEFAULT_NVR_BASE_URL),
+    )
+    parser.add_argument(
+        "--nvr-user",
+        default=os.getenv("NVR_USERNAME", DEFAULT_NVR_USERNAME),
+    )
     parser.add_argument("--nvr-password")
     parser.add_argument("--time-zone", default=os.getenv("NVR_TIME_ZONE", DEFAULT_TIME_ZONE))
     parser.add_argument(
@@ -1009,16 +1060,36 @@ def main() -> int:
         return 2
 
     firebase_password = os.getenv("TENNIS_FIREBASE_PASSWORD", "")
+    firebase_password_was_saved = False
+    if not firebase_password:
+        firebase_password = load_saved_password("firebase", email)
+        firebase_password_was_saved = bool(firebase_password)
     if not firebase_password:
         firebase_password = getpass.getpass("Carmel Tennis password: ")
 
     try:
-        db = FirebaseUserClient(
-            project_id=args.project_id,
-            api_key=args.firebase_api_key,
-            email=email,
-            password=firebase_password,
-        )
+        try:
+            db = FirebaseUserClient(
+                project_id=args.project_id,
+                api_key=args.firebase_api_key,
+                email=email,
+                password=firebase_password,
+            )
+        except RuntimeError as error:
+            if firebase_password_was_saved and "Firebase login failed" in str(error):
+                delete_saved_password("firebase", email)
+                print("Saved Carmel Tennis password is no longer valid.")
+                firebase_password = getpass.getpass("Carmel Tennis password: ")
+                db = FirebaseUserClient(
+                    project_id=args.project_id,
+                    api_key=args.firebase_api_key,
+                    email=email,
+                    password=firebase_password,
+                )
+            else:
+                raise
+
+        save_password("firebase", email, firebase_password)
         player_name = resolve_player_name(db, email, args.users_collection)
 
         if args.date:
@@ -1054,11 +1125,16 @@ def main() -> int:
         )
         return 1
 
-    nvr_url = args.nvr_url or os.getenv("NVR_BASE_URL") or input("NVR base URL: ").strip()
-    nvr_user = args.nvr_user or os.getenv("NVR_USERNAME") or input("NVR username: ").strip()
-    nvr_password = args.nvr_password or os.getenv("NVR_PASSWORD")
+    nvr_url = args.nvr_url
+    nvr_user = args.nvr_user
+    nvr_password = args.nvr_password or os.getenv("NVR_PASSWORD", "")
+    nvr_password_was_saved = False
     if not nvr_password:
-        nvr_password = getpass.getpass("NVR password: ")
+        nvr_password = load_saved_password("nvr", nvr_user)
+        nvr_password_was_saved = bool(nvr_password)
+    if not nvr_password:
+        print(f"Using NVR: {nvr_url}  user: {nvr_user}")
+        nvr_password = getpass.getpass("NVR password (saved securely after success): ")
 
     if not nvr_url or not nvr_user or not nvr_password:
         print("NVR URL, username and password are required.", file=sys.stderr)
@@ -1099,11 +1175,38 @@ def main() -> int:
             max_download_bytes=args.max_download_bytes,
         )
 
-        matches = downloader.search(
-            camera_channel=camera.channel,
-            clip_start=clip_start,
-            clip_end=clip_end,
-        )
+        try:
+            matches = downloader.search(
+                camera_channel=camera.channel,
+                clip_start=clip_start,
+                clip_end=clip_end,
+            )
+        except RuntimeError as error:
+            if nvr_password_was_saved and "HTTP 401" in str(error):
+                delete_saved_password("nvr", nvr_user)
+                print("Saved NVR password is no longer valid.")
+                nvr_password = getpass.getpass("NVR password: ")
+                downloader = HikvisionDownloader(
+                    base_url=nvr_url,
+                    username=nvr_user,
+                    password=nvr_password,
+                    time_zone=time_zone,
+                    track_suffix=args.track_suffix,
+                    search_path=os.getenv("NVR_SEARCH_PATH", DEFAULT_SEARCH_PATH),
+                    download_path=os.getenv("NVR_DOWNLOAD_PATH", DEFAULT_DOWNLOAD_PATH),
+                    verify_tls=parse_verify_tls(args.verify_tls),
+                    search_results_are_local_time=args.search_results_are_local_time,
+                    max_download_bytes=args.max_download_bytes,
+                )
+                matches = downloader.search(
+                    camera_channel=camera.channel,
+                    clip_start=clip_start,
+                    clip_end=clip_end,
+                )
+            else:
+                raise
+
+        save_password("nvr", nvr_user, nvr_password)
         selected_matches = select_overlapping_matches(matches, clip_start, clip_end)
         if not selected_matches:
             raise LookupError("No NVR recording overlaps the selected reservation hour.")
