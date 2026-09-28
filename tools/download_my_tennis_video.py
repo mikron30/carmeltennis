@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -108,6 +108,26 @@ def parse_verify_tls(value: str | None) -> bool | str:
     if raw.lower() == "false":
         return False
     return raw
+
+
+def resolve_time_zone(value: str) -> ZoneInfo:
+    raw = str(value or "").strip()
+    aliases = {
+        "israel standard time": DEFAULT_TIME_ZONE,
+        "jerusalem standard time": DEFAULT_TIME_ZONE,
+        "jerusalem": DEFAULT_TIME_ZONE,
+        "israel": DEFAULT_TIME_ZONE,
+        "asia/tel_aviv": DEFAULT_TIME_ZONE,
+    }
+    normalized = aliases.get(raw.casefold(), raw or DEFAULT_TIME_ZONE)
+    try:
+        return ZoneInfo(normalized)
+    except ZoneInfoNotFoundError as error:
+        raise RuntimeError(
+            f'Cannot load time zone "{raw or DEFAULT_TIME_ZONE}". '
+            'On Windows run: py -m pip install tzdata '
+            'and use NVR_TIME_ZONE=Asia/Jerusalem.'
+        ) from error
 
 
 def initialize_firebase(project_id: str, credentials_path: Path | None):
@@ -685,9 +705,9 @@ def main() -> int:
         return 2
 
     try:
-        time_zone = ZoneInfo(args.time_zone)
+        time_zone = resolve_time_zone(args.time_zone)
     except Exception as error:
-        print(f"Invalid time zone {args.time_zone}: {error}", file=sys.stderr)
+        print(f"Time zone error: {error}", file=sys.stderr)
         return 2
 
     email = args.email or os.getenv("TENNIS_USER_EMAIL") or input(
