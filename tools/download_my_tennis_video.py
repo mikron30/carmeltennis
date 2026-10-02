@@ -604,6 +604,37 @@ def choose_reservation(choices: list[ReservationChoice], player_name: str) -> Re
         print("Selection is out of range.")
 
 
+def choose_actual_court(cameras: dict[int, Camera], reserved_court: int) -> int:
+    if not cameras:
+        raise LookupError("No court-to-camera mappings are configured.")
+
+    print(f"\nReserved court: {reserved_court}")
+    print("Choose the court you actually played on:")
+    for court_number in sorted(cameras):
+        camera = cameras[court_number]
+        reserved_marker = " (reserved)" if court_number == reserved_court else ""
+        print(f"  {court_number}. Court {court_number} - {camera.label}{reserved_marker}")
+
+    while True:
+        raw = input(
+            f"Actual court [Enter = {reserved_court}, q = cancel]: "
+        ).strip()
+        if not raw:
+            selected = reserved_court
+        elif raw.lower() in {"q", "quit", "exit"}:
+            raise KeyboardInterrupt
+        else:
+            try:
+                selected = int(raw)
+            except ValueError:
+                print("Please enter one of the court numbers shown above.")
+                continue
+
+        if selected in cameras:
+            return selected
+        print("That court does not have a configured camera.")
+
+
 def parse_court_camera_map(raw: str) -> dict[int, Camera]:
     result: dict[int, Camera] = {}
     for item in raw.split(","):
@@ -1137,14 +1168,17 @@ def main() -> int:
         print(f"Firebase/reservation lookup failed: {error}", file=sys.stderr)
         return 1
 
-    cameras = parse_court_camera_map(args.court_camera_map)
-    camera = cameras.get(choice.court_number)
-    if camera is None:
-        print(
-            f"No camera mapping exists for court {choice.court_number}.",
-            file=sys.stderr,
-        )
+    try:
+        cameras = parse_court_camera_map(args.court_camera_map)
+        actual_court_number = choose_actual_court(cameras, choice.court_number)
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        return 130
+    except Exception as error:
+        print(f"Court selection failed: {error}", file=sys.stderr)
         return 1
+
+    camera = cameras[actual_court_number]
 
     nvr_url = args.nvr_url
     nvr_user = args.nvr_user
@@ -1170,15 +1204,20 @@ def main() -> int:
 
     clip_start, clip_end = reservation_window(choice, time_zone)
     output_name = (
-        f"court_{choice.court_number}_{choice.date}_"
+        f"court_{actual_court_number}_{choice.date}_"
         f"{clip_start:%H%M}-{clip_end:%H%M}.mp4"
     )
     destination = args.output_dir / output_name
 
     print(
         f"\nSelected: {choice.date}, {clip_start:%H:%M}-"
-        f"{clip_end:%H:%M}, court {choice.court_number}"
+        f"{clip_end:%H:%M}, actual court {actual_court_number}"
     )
+    if actual_court_number != choice.court_number:
+        print(
+            f"Reservation was for court {choice.court_number}; "
+            f"using court {actual_court_number} video instead."
+        )
     print(f"Camera: {camera.label}, NVR channel {camera.channel}")
     print(f"Output: {destination}")
 
