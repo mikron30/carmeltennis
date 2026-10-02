@@ -995,7 +995,10 @@ def concat_parts(parts: list[Path], destination: Path) -> None:
 def reservation_window(choice: ReservationChoice, time_zone: ZoneInfo) -> tuple[datetime, datetime]:
     day = datetime.strptime(choice.date, "%Y-%m-%d")
     start = day.replace(hour=choice.hour, minute=0, second=0, tzinfo=time_zone)
-    return start, start + timedelta(hours=1)
+    duration = timedelta(hours=1)
+    if choice.hour == 21:
+        duration += timedelta(minutes=20)
+    return start, start + duration
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1168,13 +1171,13 @@ def main() -> int:
     clip_start, clip_end = reservation_window(choice, time_zone)
     output_name = (
         f"court_{choice.court_number}_{choice.date}_"
-        f"{choice.hour:02d}00-{choice.hour + 1:02d}00.mp4"
+        f"{clip_start:%H%M}-{clip_end:%H%M}.mp4"
     )
     destination = args.output_dir / output_name
 
     print(
-        f"\nSelected: {choice.date}, {choice.hour:02d}:00-"
-        f"{choice.hour + 1:02d}:00, court {choice.court_number}"
+        f"\nSelected: {choice.date}, {clip_start:%H:%M}-"
+        f"{clip_end:%H:%M}, court {choice.court_number}"
     )
     print(f"Camera: {camera.label}, NVR channel {camera.channel}")
     print(f"Output: {destination}")
