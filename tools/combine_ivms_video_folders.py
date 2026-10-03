@@ -289,7 +289,7 @@ def combine_directory(
 
     if destination.exists() and not overwrite:
         print(f"  SKIP: output already exists: {destination}")
-        return destination
+        return None
 
     videos = collect_video_files(ffprobe, source_directory)
     if not videos:
