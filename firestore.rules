@@ -1,0 +1,111 @@
+rules_version = '2';
+
+// Deployed with:  firebase deploy --only firestore:rules
+// Target project comes from .firebaserc (potent-howl-228108). This file is the
+// source of truth — the console's rule editor writes the same ruleset, so any
+// edit made there will be overwritten by the next deploy from this repo.
+//
+// Replaces a single `match /{document=**} { allow read, write: if request.auth
+// != null; }`, under which any signed-in member could delete anyone's booking,
+// rewrite another member's profile, or drop a malformed doc into reservations.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myDocPath() {
+      return /databases/$(database)/documents/users_2024/$(request.auth.uid);
+    }
+
+    // users_2024 is keyed by Firebase Auth uid — change_password.dart and
+    // users_management.dart both address it as .doc(uid), and a spot check
+    // against the Authentication table matches. A member whose legacy doc is
+    // not uid-keyed simply fails these checks; nothing is granted by accident.
+    function myName() {
+      let p = get(myDocPath()).data;
+      return (p.get('שם פרטי', '') + ' ' + p.get('שם משפחה', '')).trim();
+    }
+
+    // Mirrors the hardcoded list in home_page.dart _refreshManagerFlag.
+    // There is no manager flag in Firestore, so the two must be kept in sync.
+    function isManager() {
+      return signedIn() && exists(myDocPath()) && myName() in [
+        'אודי אש', 'רני לפלר', 'עפר בן ישי', 'מיקי זילברשטיין', 'מועדון כרמל'
+      ];
+    }
+
+    function validReservation(d) {
+      return d.keys().hasOnly(
+               ['date', 'courtNumber', 'hour', 'isReserved', 'userName', 'partner'])
+        && d.keys().hasAll(['date', 'courtNumber', 'hour', 'userName', 'partner'])
+        && d.date is string
+        && d.courtNumber is int && d.courtNumber >= 1 && d.courtNumber <= 3
+        && d.hour is int && d.hour >= 7 && d.hour <= 21
+        && d.userName is string && d.userName.size() > 0
+        && d.partner is string;
+    }
+
+    match /reservations/{cell} {
+      allow read: if signedIn();
+
+      // Shape is enforced on write so `hour` and `courtNumber` cannot drift to
+      // String again. One such doc throws inside the snapshot listener, which
+      // kills the stream and hangs the grid for every member at once — see
+      // readIntField in reservation_manager.dart.
+      allow create: if signedIn() && validReservation(request.resource.data);
+
+      // The app never edits a booking in place; it deletes the cell and rebooks.
+      allow update: if false;
+
+      // Deliberately still open to any signed-in member. Narrowing this to
+      // "participant or manager" needs myName(), and a member whose profile doc
+      // is not uid-keyed would then be unable to cancel their own booking.
+      // Verify name resolution across the whole member list before tightening.
+      allow delete: if signedIn();
+    }
+
+    match /day_locks/{lock} {
+      // Claimed and released inside the booking transaction and cancel batch.
+      // Not sensitive: a stray lock only ever blocks its own owner, and
+      // createReservation reclaims one whose reservation no longer exists.
+      allow read, write: if signedIn();
+    }
+
+    match /users_2024/{userId} {
+      allow read: if signedIn();
+
+      // A member may change their own preferences and nothing else — not their
+      // name, email or phone, and never another member's document.
+      allow update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['lastFivePartners', 'receiveReservationEmails',
+              'darkMode', 'bookingDensity', 'isFirstLogin']);
+
+      // Manager add-user. Note createUserWithEmailAndPassword signs the client
+      // in AS the new user, so this write usually arrives with
+      // request.auth.uid == userId rather than as the manager.
+      allow create: if signedIn() && (request.auth.uid == userId || isManager());
+      allow update: if isManager();
+
+      // Removal goes through the deleteUserAccount callable, which uses the
+      // Admin SDK and bypasses rules entirely.
+      allow delete: if false;
+    }
+
+    match /holidays/{date} {
+      allow read: if signedIn();
+      allow write: if isManager();
+    }
+
+    match /tv/{doc} {
+      allow read: if signedIn();
+      allow write: if isManager();
+    }
+
+    // guestbook/ and test/ are leftovers from the Firebase sample app and are
+    // referenced by no code path. Left unmatched, so they default to denied.
+  }
+}
