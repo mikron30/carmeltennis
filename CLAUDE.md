@@ -47,13 +47,13 @@ The Python scripts at the repo root (`add_users_to_database_*.py`, `delete_all_r
 ### Reservation flow
 
 - `home_page.dart` is the main screen (date selector + partner picker + grid). It owns auth subscriptions (`authStateChanges`, `idTokenChanges`), manager-flag resolution, and prefs loading. Note the explicit `_managerResolved` gate to avoid flashing the wrong UI before the role lookup completes.
-- `court_reservation.dart` (`CourtReservations` widget) renders the grid for a given date. It computes `numberOfCourts` per day (default 2, can change for holidays via `holidays` collection), then initialises a slot map for hours 7–21 per court.
+- `booking_screen_v31.dart` (`BookingScreenV31` widget) is the booking grid for a given date. It resolves `numberOfCourts` per day via `numberOfCourtsFor` in `holiday_courts.dart` (default 2, changed for holidays via the `holidays` collection's `holidayType`), and renders slots through the shared `widgets/time_grid.dart` (`TimeGrid`) for hours 7–21 per court.
 - `reservation_manager.dart::hasExistingReservation` enforces the "one booking per user per date" rule by querying `reservations` twice — once where the user is `userName`, once where they are `partner` — because the partner field counts as a participating booking.
 - `email_service.dart` builds RTL Hebrew confirmation/cancellation HTML emails sent via `dio`. The reservation widget calls into it when a slot is booked or cancelled.
 
 ### TV display
 
-`/tv` (`tv_screen.dart`) is a read-only kiosk view of the day's reservations using full names; `/tv-message` is the manager-only editor for the banner shown on `/tv`. `CourtReservations` switches naming via the `useFullNames` flag.
+`/tv` (`tv_screen.dart`) is a read-only kiosk view of the day's reservations showing full names; it renders the same `widgets/time_grid.dart` (`TimeGrid`) grid via a custom `slotBuilder`. `/tv-message` is the manager-only editor for the banner shown on `/tv`.
 
 ## Deployment notes
 
