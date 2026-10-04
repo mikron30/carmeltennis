@@ -12,9 +12,13 @@ For every immediate subdirectory under the source directory, the script:
 2. Sorts them naturally by filename/path.
 3. Re-encodes each fragment to a normalized H.264/AAC MP4.
 4. Concatenates the normalized fragments into one MP4.
-5. Writes <directory-name>.mp4 to the destination directory.
+5. Verifies the final MP4 with ffprobe.
+6. Deletes the source directory only after a valid MP4 exists.
+7. If a valid MP4 already exists, deletes the matching source directory
+   without converting it again.
 
-Original iVMS files are never modified or deleted.
+A source directory is never deleted unless its destination MP4 passes
+validation.
 
 Requirements:
   ffmpeg and ffprobe must be installed and available in PATH.
@@ -125,6 +129,56 @@ def probe_streams(ffprobe: str, source: Path) -> tuple[bool, bool]:
         if isinstance(stream, dict)
     }
     return "video" in stream_types, "audio" in stream_types
+
+
+def valid_output_mp4(ffprobe: str, path: Path) -> bool:
+    """Return True only for a non-empty MP4 with video and positive duration."""
+    if not path.is_file() or path.stat().st_size < 1024:
+        return False
+
+    try:
+        result = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type:format=duration",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+    if result.returncode != 0:
+        return False
+
+    try:
+        payload = json.loads(result.stdout or "{}")
+        stream_types = {
+            str(stream.get("codec_type", "")).lower()
+            for stream in payload.get("streams", [])
+            if isinstance(stream, dict)
+        }
+        duration = float((payload.get("format") or {}).get("duration") or 0)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return False
+
+    return "video" in stream_types and duration > 0
+
+
+def delete_source_directory(directory: Path) -> None:
+    """Delete a source directory after its MP4 has been verified."""
+    shutil.rmtree(directory)
+    if directory.exists():
+        raise RuntimeError(f"Could not delete source directory: {directory}")
+    print(f"  Deleted source directory: {directory}")
 
 
 def collect_video_files(ffprobe: str, directory: Path) -> list[tuple[Path, bool]]:
@@ -283,20 +337,28 @@ def combine_directory(
     source_directory: Path,
     output_directory: Path,
     overwrite: bool,
-) -> Path | None:
+) -> str:
     output_name = sanitize_filename(source_directory.name) + ".mp4"
     destination = output_directory / output_name
 
     if destination.exists() and not overwrite:
-        print(f"  SKIP: output already exists: {destination}")
-        return None
+        if valid_output_mp4(ffprobe, destination):
+            size_mb = destination.stat().st_size / (1024 * 1024)
+            print(f"  EXISTS and verified: {destination} ({size_mb:.1f} MB)")
+            delete_source_directory(source_directory)
+            return "existing"
+
+        print(f"  Existing output is invalid; rebuilding: {destination}")
+        destination.unlink(missing_ok=True)
 
     videos = collect_video_files(ffprobe, source_directory)
     if not videos:
-        print("  SKIP: no playable video files found.")
-        return None
+        print("  SKIP: no playable video files found; source was NOT deleted.")
+        return "skipped"
 
     print(f"  Found {len(videos)} video fragment(s).")
+
+    output_directory.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="ivms-combine-") as temp:
         temp_directory = Path(temp)
@@ -316,18 +378,37 @@ def combine_directory(
             )
             parts.append(part)
 
+        # Build into a temporary MP4 first. Only replace the real destination
+        # after the complete file has passed ffprobe validation.
+        staged_destination = temp_directory / output_name
         print(f"  Joining {len(parts)} part(s)...")
-        concat_parts(ffmpeg, parts, destination)
+        concat_parts(ffmpeg, parts, staged_destination)
+
+        if not valid_output_mp4(ffprobe, staged_destination):
+            raise RuntimeError(
+                "Final MP4 failed ffprobe validation; source was NOT deleted."
+            )
+
+        if destination.exists():
+            destination.unlink()
+        shutil.move(str(staged_destination), str(destination))
+
+    if not valid_output_mp4(ffprobe, destination):
+        raise RuntimeError(
+            "Destination MP4 failed final validation; source was NOT deleted."
+        )
 
     size_mb = destination.stat().st_size / (1024 * 1024)
-    print(f"  DONE: {destination} ({size_mb:.1f} MB)")
-    return destination
+    print(f"  CREATED and verified: {destination} ({size_mb:.1f} MB)")
+    delete_source_directory(source_directory)
+    return "created"
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Combine every iVMS download subdirectory into one MP4 file."
+            "Combine every iVMS download subdirectory into one MP4 file, "
+            "verify it, then delete the source directory."
         )
     )
     parser.add_argument(
@@ -386,7 +467,8 @@ def main() -> int:
     print(f"Directories found: {len(directories)}")
     print()
 
-    completed = 0
+    created = 0
+    existing = 0
     skipped = 0
     failed: list[tuple[Path, str]] = []
 
@@ -401,10 +483,12 @@ def main() -> int:
                 output_directory=output_root,
                 overwrite=args.overwrite,
             )
-            if result is None:
-                skipped += 1
+            if result == "created":
+                created += 1
+            elif result == "existing":
+                existing += 1
             else:
-                completed += 1
+                skipped += 1
         except KeyboardInterrupt:
             print("\nCancelled.")
             return 130
@@ -415,8 +499,8 @@ def main() -> int:
     print()
     print("=" * 80)
     print(
-        f"Finished. Completed: {completed}, skipped: {skipped}, "
-        f"failed: {len(failed)}"
+        f"Finished. Created: {created}, already existed: {existing}, "
+        f"skipped: {skipped}, failed: {len(failed)}"
     )
 
     if failed:
