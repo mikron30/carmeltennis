@@ -28,11 +28,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -42,6 +45,10 @@ DEFAULT_OUTPUT = Path(
 )
 
 FFMPEG_TIMEOUT_SECONDS = 6 * 60 * 60
+VIDEO_EXTENSIONS = {
+    ".avi", ".mp4", ".mkv", ".mov", ".mpeg", ".mpg", ".ts",
+    ".m2ts", ".dav", ".264", ".h264", ".hevc", ".h265",
+}
 
 
 def natural_key(path: Path) -> list[object]:
@@ -173,29 +180,72 @@ def valid_output_mp4(ffprobe: str, path: Path) -> bool:
     return "video" in stream_types and duration > 0
 
 
-def delete_source_directory(directory: Path) -> None:
-    """Delete a source directory after its MP4 has been verified."""
-    shutil.rmtree(directory)
-    if directory.exists():
-        raise RuntimeError(f"Could not delete source directory: {directory}")
-    print(f"  Deleted source directory: {directory}")
+def _make_writable_and_retry(func, path: str, _exc_info) -> None:
+    """shutil.rmtree error handler for Windows read-only files/folders."""
+    try:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
+        func(path)
+    except OSError:
+        raise
 
 
-def collect_video_files(ffprobe: str, directory: Path) -> list[tuple[Path, bool]]:
+def delete_source_directory(directory: Path) -> bool:
+    """Try to delete a verified source directory without stopping the batch."""
+    last_error: OSError | None = None
+
+    for attempt in range(1, 4):
+        try:
+            shutil.rmtree(directory, onerror=_make_writable_and_retry)
+            if not directory.exists():
+                print(f"  Deleted source directory: {directory}")
+                return True
+        except OSError as error:
+            last_error = error
+
+        if attempt < 3:
+            print(
+                f"  Delete attempt {attempt}/3 failed; retrying in 2 seconds..."
+            )
+            time.sleep(2)
+
+    print(
+        "  WARNING: video is verified, but the source directory could not be "
+        "deleted."
+    )
+    if last_error is not None:
+        print(f"  Delete error: {last_error}")
+    print(
+        "  Close iVMS-4200 if it is running, or run this script from an "
+        "Administrator terminal, then run it again."
+    )
+    return False
+
+
+def collect_video_files(
+    ffprobe: str,
+    directory: Path,
+) -> tuple[list[tuple[Path, bool]], list[Path]]:
     candidates = sorted(
         (path for path in directory.rglob("*") if path.is_file()),
         key=natural_key,
     )
 
     videos: list[tuple[Path, bool]] = []
+    unreadable_video_files: list[Path] = []
+
     for path in candidates:
         has_video, has_audio = probe_streams(ffprobe, path)
         if has_video:
             videos.append((path, has_audio))
-        else:
-            print(f"    Skipping non-video/unreadable file: {path.name}")
+            continue
 
-    return videos
+        if path.suffix.casefold() in VIDEO_EXTENSIONS:
+            unreadable_video_files.append(path)
+            print(f"    WARNING: unreadable video file: {path.name}")
+        else:
+            print(f"    Skipping non-video file: {path.name}")
+
+    return videos, unreadable_video_files
 
 
 def normalize_fragment(
@@ -345,13 +395,17 @@ def combine_directory(
         if valid_output_mp4(ffprobe, destination):
             size_mb = destination.stat().st_size / (1024 * 1024)
             print(f"  EXISTS and verified: {destination} ({size_mb:.1f} MB)")
-            delete_source_directory(source_directory)
-            return "existing"
+            if delete_source_directory(source_directory):
+                return "existing"
+            return "cleanup_pending"
 
         print(f"  Existing output is invalid; rebuilding: {destination}")
         destination.unlink(missing_ok=True)
 
-    videos = collect_video_files(ffprobe, source_directory)
+    videos, unreadable_video_files = collect_video_files(
+        ffprobe,
+        source_directory,
+    )
     if not videos:
         print("  SKIP: no playable video files found; source was NOT deleted.")
         return "skipped"
@@ -400,8 +454,21 @@ def combine_directory(
 
     size_mb = destination.stat().st_size / (1024 * 1024)
     print(f"  CREATED and verified: {destination} ({size_mb:.1f} MB)")
-    delete_source_directory(source_directory)
-    return "created"
+
+    if unreadable_video_files:
+        print(
+            f"  WARNING: {len(unreadable_video_files)} video-looking source "
+            "file(s) could not be read."
+        )
+        print(
+            "  The MP4 was created from the readable fragments, but the "
+            "source directory was NOT deleted for safety."
+        )
+        return "incomplete"
+
+    if delete_source_directory(source_directory):
+        return "created"
+    return "cleanup_pending"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -469,6 +536,8 @@ def main() -> int:
 
     created = 0
     existing = 0
+    cleanup_pending = 0
+    incomplete = 0
     skipped = 0
     failed: list[tuple[Path, str]] = []
 
@@ -487,6 +556,10 @@ def main() -> int:
                 created += 1
             elif result == "existing":
                 existing += 1
+            elif result == "cleanup_pending":
+                cleanup_pending += 1
+            elif result == "incomplete":
+                incomplete += 1
             else:
                 skipped += 1
         except KeyboardInterrupt:
@@ -499,7 +572,8 @@ def main() -> int:
     print()
     print("=" * 80)
     print(
-        f"Finished. Created: {created}, already existed: {existing}, "
+        f"Finished. Created+cleaned: {created}, existing+cleaned: {existing}, "
+        f"cleanup pending: {cleanup_pending}, incomplete kept: {incomplete}, "
         f"skipped: {skipped}, failed: {len(failed)}"
     )
 
