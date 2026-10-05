@@ -8,13 +8,14 @@ Defaults:
     C:\Users\Roy\Documents\carmeltennis\downloaded_tennis_videos
 
 For every immediate subdirectory under the source directory, the script:
-1. Finds all playable video files inside that directory (recursively).
-2. Sorts them naturally by filename/path.
-3. Re-encodes each fragment to a normalized H.264/AAC MP4.
-4. Concatenates the normalized fragments into one MP4.
-5. Verifies the final MP4 with ffprobe.
-6. Deletes the source directory only after a valid MP4 exists.
-7. If a valid MP4 already exists, deletes the matching source directory
+1. Finds all video files inside that directory (recursively).
+2. Deletes video files that ffprobe cannot read.
+3. Sorts the readable fragments naturally by filename/path.
+4. Re-encodes each fragment to a normalized H.264/AAC MP4.
+5. Concatenates the normalized fragments into one MP4.
+6. Verifies the final MP4 with ffprobe.
+7. Deletes the source directory only after a valid MP4 exists.
+8. If a valid MP4 already exists, deletes the matching source directory
    without converting it again.
 
 A source directory is never deleted unless its destination MP4 passes
@@ -222,35 +223,65 @@ def delete_source_directory(directory: Path) -> bool:
     return False
 
 
+def delete_unreadable_video(path: Path) -> bool:
+    """Delete an unreadable source video file, including read-only files."""
+    try:
+        try:
+            path.chmod(stat.S_IREAD | stat.S_IWRITE)
+        except OSError:
+            pass
+        path.unlink()
+        return True
+    except OSError as error:
+        print(f"    WARNING: could not delete unreadable file: {path.name}")
+        print(f"             {error}")
+        return False
+
+
 def collect_video_files(
     ffprobe: str,
     directory: Path,
-) -> tuple[list[tuple[Path, bool]], list[Path]]:
+) -> tuple[list[tuple[Path, bool]], int, int]:
     candidates = sorted(
         (path for path in directory.rglob("*") if path.is_file()),
         key=natural_key,
     )
 
     videos: list[tuple[Path, bool]] = []
-    unreadable_video_files: list[Path] = []
+    deleted_unreadable = 0
+    failed_unreadable_deletes = 0
 
     for path in candidates:
         suffix = path.suffix.casefold()
 
-        # iVMS folders often contain JPG preview/snapshot files next to the
-        # actual AVI/MP4 fragments. ffprobe can report a JPG as a one-frame
-        # video stream, so never probe non-video extensions as source clips.
+        # iVMS folders often contain JPG snapshots next to the real AVI/MP4
+        # fragments. Never treat non-video extensions as source clips.
         if suffix not in VIDEO_EXTENSIONS:
             continue
 
         has_video, has_audio = probe_streams(ffprobe, path)
         if has_video:
             videos.append((path, has_audio))
-        else:
-            unreadable_video_files.append(path)
-            print(f"    WARNING: unreadable video file: {path.name}")
+            continue
 
-    return videos, unreadable_video_files
+        # The operator explicitly wants unreadable video files discarded.
+        if delete_unreadable_video(path):
+            deleted_unreadable += 1
+        else:
+            failed_unreadable_deletes += 1
+
+    if deleted_unreadable:
+        print(
+            f"  Deleted {deleted_unreadable} unreadable video file(s) "
+            "from the source directory."
+        )
+    if failed_unreadable_deletes:
+        print(
+            f"  WARNING: could not delete {failed_unreadable_deletes} "
+            "unreadable video file(s)."
+        )
+
+    return videos, deleted_unreadable, failed_unreadable_deletes
 
 
 def normalize_fragment(
@@ -433,7 +464,7 @@ def combine_directory(
         destination.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
 
-    videos, unreadable_video_files = collect_video_files(
+    videos, deleted_unreadable, failed_unreadable_deletes = collect_video_files(
         ffprobe,
         source_directory,
     )
@@ -486,16 +517,16 @@ def combine_directory(
     size_mb = destination.stat().st_size / (1024 * 1024)
     print(f"  CREATED and verified: {destination} ({size_mb:.1f} MB)")
 
-    if unreadable_video_files:
+    if deleted_unreadable:
         print(
-            f"  WARNING: {len(unreadable_video_files)} real video file(s) "
-            "could not be read."
+            f"  Note: {deleted_unreadable} unreadable source video file(s) "
+            "were discarded before creating this MP4."
         )
+    if failed_unreadable_deletes:
         print(
-            "  The MP4 was created from the readable video fragments, but "
-            "the source directory was NOT deleted for safety."
+            "  Some unreadable source files are still present because Windows "
+            "blocked their deletion; source-folder cleanup will still be tried."
         )
-        return "incomplete"
 
     write_verified_marker(destination)
 
@@ -570,7 +601,6 @@ def main() -> int:
     created = 0
     existing = 0
     cleanup_pending = 0
-    incomplete = 0
     skipped = 0
     failed: list[tuple[Path, str]] = []
 
@@ -591,8 +621,6 @@ def main() -> int:
                 existing += 1
             elif result == "cleanup_pending":
                 cleanup_pending += 1
-            elif result == "incomplete":
-                incomplete += 1
             else:
                 skipped += 1
         except KeyboardInterrupt:
@@ -606,7 +634,7 @@ def main() -> int:
     print("=" * 80)
     print(
         f"Finished. Created+cleaned: {created}, existing+cleaned: {existing}, "
-        f"cleanup pending: {cleanup_pending}, incomplete kept: {incomplete}, "
+        f"cleanup pending: {cleanup_pending}, "
         f"skipped: {skipped}, failed: {len(failed)}"
     )
 
