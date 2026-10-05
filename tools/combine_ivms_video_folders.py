@@ -49,6 +49,7 @@ VIDEO_EXTENSIONS = {
     ".avi", ".mp4", ".mkv", ".mov", ".mpeg", ".mpg", ".ts",
     ".m2ts", ".dav", ".264", ".h264", ".hevc", ".h265",
 }
+VERIFIED_MARKER_SUFFIX = ".ivms_verified"
 
 
 def natural_key(path: Path) -> list[object]:
@@ -234,16 +235,20 @@ def collect_video_files(
     unreadable_video_files: list[Path] = []
 
     for path in candidates:
+        suffix = path.suffix.casefold()
+
+        # iVMS folders often contain JPG preview/snapshot files next to the
+        # actual AVI/MP4 fragments. ffprobe can report a JPG as a one-frame
+        # video stream, so never probe non-video extensions as source clips.
+        if suffix not in VIDEO_EXTENSIONS:
+            continue
+
         has_video, has_audio = probe_streams(ffprobe, path)
         if has_video:
             videos.append((path, has_audio))
-            continue
-
-        if path.suffix.casefold() in VIDEO_EXTENSIONS:
+        else:
             unreadable_video_files.append(path)
             print(f"    WARNING: unreadable video file: {path.name}")
-        else:
-            print(f"    Skipping non-video file: {path.name}")
 
     return videos, unreadable_video_files
 
@@ -380,6 +385,19 @@ def concat_parts(ffmpeg: str, parts: list[Path], destination: Path) -> None:
         raise RuntimeError(f"FFmpeg did not create {destination.name}")
 
 
+def verified_marker_path(destination: Path) -> Path:
+    return destination.with_name(destination.name + VERIFIED_MARKER_SUFFIX)
+
+
+def write_verified_marker(destination: Path) -> None:
+    marker = verified_marker_path(destination)
+    marker.write_text(
+        "Created by combine_ivms_video_folders.py after filtering source "
+        "files to real video extensions and validating the final MP4.\n",
+        encoding="utf-8",
+    )
+
+
 def combine_directory(
     ffmpeg: str,
     ffprobe: str,
@@ -391,16 +409,29 @@ def combine_directory(
     output_name = sanitize_filename(source_directory.name) + ".mp4"
     destination = output_directory / output_name
 
+    marker = verified_marker_path(destination)
+
     if destination.exists() and not overwrite:
-        if valid_output_mp4(ffprobe, destination):
+        if valid_output_mp4(ffprobe, destination) and marker.is_file():
             size_mb = destination.stat().st_size / (1024 * 1024)
-            print(f"  EXISTS and verified: {destination} ({size_mb:.1f} MB)")
+            print(
+                f"  EXISTS and verified by current script: "
+                f"{destination} ({size_mb:.1f} MB)"
+            )
             if delete_source_directory(source_directory):
                 return "existing"
             return "cleanup_pending"
 
-        print(f"  Existing output is invalid; rebuilding: {destination}")
+        if valid_output_mp4(ffprobe, destination):
+            print(
+                "  Existing MP4 was created before the JPG-filter fix; "
+                "rebuilding it safely from real video files only."
+            )
+        else:
+            print(f"  Existing output is invalid; rebuilding: {destination}")
+
         destination.unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
 
     videos, unreadable_video_files = collect_video_files(
         ffprobe,
@@ -457,14 +488,16 @@ def combine_directory(
 
     if unreadable_video_files:
         print(
-            f"  WARNING: {len(unreadable_video_files)} video-looking source "
-            "file(s) could not be read."
+            f"  WARNING: {len(unreadable_video_files)} real video file(s) "
+            "could not be read."
         )
         print(
-            "  The MP4 was created from the readable fragments, but the "
-            "source directory was NOT deleted for safety."
+            "  The MP4 was created from the readable video fragments, but "
+            "the source directory was NOT deleted for safety."
         )
         return "incomplete"
+
+    write_verified_marker(destination)
 
     if delete_source_directory(source_directory):
         return "created"
