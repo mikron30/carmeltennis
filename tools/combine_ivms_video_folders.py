@@ -8,8 +8,9 @@ Defaults:
     C:\Users\Roy\Documents\carmeltennis\downloaded_tennis_videos
 
 For every immediate subdirectory under the source directory, the script:
-1. Finds all video files inside that directory (recursively).
-2. Deletes video files that ffprobe cannot read.
+1. Scans all candidate video files and prints a full preview with size/duration.
+2. Waits for confirmation before changing anything.
+3. Deletes video files that ffprobe cannot read.
 3. Sorts the readable fragments naturally by filename/path.
 4. Re-encodes each fragment to a normalized H.264/AAC MP4.
 5. Concatenates the normalized fragments into one MP4.
@@ -140,6 +141,68 @@ def probe_streams(ffprobe: str, source: Path) -> tuple[bool, bool]:
     return "video" in stream_types, "audio" in stream_types
 
 
+def probe_video_details(
+    ffprobe: str,
+    source: Path,
+) -> tuple[bool, bool, float | None]:
+    """Return (has_video, has_audio, duration_seconds)."""
+    try:
+        result = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type:format=duration",
+                "-of",
+                "json",
+                str(source),
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, False, None
+
+    if result.returncode != 0:
+        return False, False, None
+
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return False, False, None
+
+    stream_types = {
+        str(stream.get("codec_type", "")).lower()
+        for stream in payload.get("streams", [])
+        if isinstance(stream, dict)
+    }
+    duration_value = (payload.get("format") or {}).get("duration")
+    try:
+        duration = float(duration_value) if duration_value is not None else None
+    except (TypeError, ValueError):
+        duration = None
+
+    return "video" in stream_types, "audio" in stream_types, duration
+
+
+def format_duration(seconds: float | None) -> str:
+    if seconds is None or seconds < 0:
+        return "unknown"
+    total = int(round(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def format_size(size_bytes: int) -> str:
+    return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
 def valid_output_mp4(ffprobe: str, path: Path) -> bool:
     """Return True only for a non-empty MP4 with video and positive duration."""
     if not path.is_file() or path.stat().st_size < 1024:
@@ -241,47 +304,120 @@ def delete_unreadable_video(path: Path) -> bool:
 def collect_video_files(
     ffprobe: str,
     directory: Path,
-) -> tuple[list[tuple[Path, bool]], int, int]:
+) -> tuple[
+    list[tuple[Path, bool, float | None]],
+    list[Path],
+    int,
+]:
     candidates = sorted(
         (path for path in directory.rglob("*") if path.is_file()),
         key=natural_key,
     )
 
-    videos: list[tuple[Path, bool]] = []
-    deleted_unreadable = 0
-    failed_unreadable_deletes = 0
+    videos: list[tuple[Path, bool, float | None]] = []
+    unreadable: list[Path] = []
+    ignored_count = 0
 
     for path in candidates:
         suffix = path.suffix.casefold()
 
-        # iVMS folders often contain JPG snapshots next to the real AVI/MP4
-        # fragments. Never treat non-video extensions as source clips.
         if suffix not in VIDEO_EXTENSIONS:
+            ignored_count += 1
             continue
 
-        has_video, has_audio = probe_streams(ffprobe, path)
+        has_video, has_audio, duration = probe_video_details(ffprobe, path)
         if has_video:
-            videos.append((path, has_audio))
-            continue
-
-        # The operator explicitly wants unreadable video files discarded.
-        if delete_unreadable_video(path):
-            deleted_unreadable += 1
+            videos.append((path, has_audio, duration))
         else:
-            failed_unreadable_deletes += 1
+            unreadable.append(path)
 
-    if deleted_unreadable:
-        print(
-            f"  Deleted {deleted_unreadable} unreadable video file(s) "
-            "from the source directory."
-        )
-    if failed_unreadable_deletes:
-        print(
-            f"  WARNING: could not delete {failed_unreadable_deletes} "
-            "unreadable video file(s)."
-        )
+    return videos, unreadable, ignored_count
 
-    return videos, deleted_unreadable, failed_unreadable_deletes
+
+def print_directory_preview(
+    source_directory: Path,
+    videos: list[tuple[Path, bool, float | None]],
+    unreadable: list[Path],
+    ignored_count: int,
+) -> None:
+    print()
+    print("  PREVIEW - nothing has been changed yet")
+    print("  " + "-" * 76)
+
+    total_size = sum(path.stat().st_size for path, _, _ in videos)
+    total_duration = sum(
+        duration for _, _, duration in videos if duration is not None
+    )
+
+    by_extension: dict[str, int] = {}
+    for path, _, _ in videos:
+        ext = path.suffix.casefold() or "<none>"
+        by_extension[ext] = by_extension.get(ext, 0) + 1
+
+    print(f"  Readable video files to combine: {len(videos)}")
+    print(f"  Unreadable video files to delete: {len(unreadable)}")
+    print(f"  Non-video files ignored: {ignored_count}")
+    print(f"  Total readable size: {format_size(total_size)}")
+    print(f"  Total readable duration: {format_duration(total_duration)}")
+    if by_extension:
+        extensions = ", ".join(
+            f"{ext}: {count}" for ext, count in sorted(by_extension.items())
+        )
+        print(f"  Readable types: {extensions}")
+
+    print()
+    print("  FILES THAT WILL BE COMBINED:")
+    if not videos:
+        print("    (none)")
+    else:
+        for index, (path, has_audio, duration) in enumerate(videos, start=1):
+            size_text = format_size(path.stat().st_size)
+            audio_text = "audio" if has_audio else "no-audio"
+            relative = path.relative_to(source_directory)
+            print(
+                f"    {index:>4}. {size_text:>10}  "
+                f"{format_duration(duration):>8}  {audio_text:<8}  {relative}"
+            )
+
+    if videos:
+        print()
+        print("  LARGEST READABLE FILES:")
+        largest = sorted(
+            videos,
+            key=lambda item: item[0].stat().st_size,
+            reverse=True,
+        )[:15]
+        for path, _, duration in largest:
+            print(
+                f"    {format_size(path.stat().st_size):>10}  "
+                f"{format_duration(duration):>8}  "
+                f"{path.relative_to(source_directory)}"
+            )
+
+    if unreadable:
+        print()
+        print("  UNREADABLE VIDEO FILES THAT WILL BE DELETED:")
+        for index, path in enumerate(unreadable, start=1):
+            print(
+                f"    {index:>4}. {format_size(path.stat().st_size):>10}  "
+                f"{path.relative_to(source_directory)}"
+            )
+
+    print("  " + "-" * 76)
+
+
+def confirm_directory() -> str:
+    while True:
+        answer = input(
+            "  Proceed with this directory? [y = yes, s = skip, q = quit]: "
+        ).strip().lower()
+        if answer in {"y", "yes"}:
+            return "yes"
+        if answer in {"s", "skip", "n", "no", ""}:
+            return "skip"
+        if answer in {"q", "quit", "exit"}:
+            return "quit"
+        print("  Please enter y, s, or q.")
 
 
 def normalize_fragment(
@@ -436,11 +572,36 @@ def combine_directory(
     source_directory: Path,
     output_directory: Path,
     overwrite: bool,
+    assume_yes: bool,
+    preview_only: bool,
 ) -> str:
     output_name = sanitize_filename(source_directory.name) + ".mp4"
     destination = output_directory / output_name
 
     marker = verified_marker_path(destination)
+
+    videos, unreadable_video_files, ignored_count = collect_video_files(
+        ffprobe,
+        source_directory,
+    )
+    print_directory_preview(
+        source_directory,
+        videos,
+        unreadable_video_files,
+        ignored_count,
+    )
+
+    if preview_only:
+        print("  Preview only: no files were changed.")
+        return "previewed"
+
+    if not assume_yes:
+        decision = confirm_directory()
+        if decision == "quit":
+            raise KeyboardInterrupt
+        if decision == "skip":
+            print("  Skipped by user. No files were changed.")
+            return "skipped"
 
     if destination.exists() and not overwrite:
         if valid_output_mp4(ffprobe, destination) and marker.is_file():
@@ -464,15 +625,27 @@ def combine_directory(
         destination.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
 
-    videos, deleted_unreadable, failed_unreadable_deletes = collect_video_files(
-        ffprobe,
-        source_directory,
-    )
     if not videos:
         print("  SKIP: no playable video files found; source was NOT deleted.")
         return "skipped"
 
-    print(f"  Found {len(videos)} video fragment(s).")
+    deleted_unreadable = 0
+    failed_unreadable_deletes = 0
+    for path in unreadable_video_files:
+        if delete_unreadable_video(path):
+            deleted_unreadable += 1
+        else:
+            failed_unreadable_deletes += 1
+
+    if deleted_unreadable:
+        print(f"  Deleted {deleted_unreadable} unreadable video file(s).")
+    if failed_unreadable_deletes:
+        print(
+            f"  WARNING: could not delete {failed_unreadable_deletes} "
+            "unreadable video file(s)."
+        )
+
+    print(f"  Found {len(videos)} readable video fragment(s).")
 
     output_directory.mkdir(parents=True, exist_ok=True)
 
@@ -480,7 +653,7 @@ def combine_directory(
         temp_directory = Path(temp)
         parts: list[Path] = []
 
-        for index, (source, has_audio) in enumerate(videos, start=1):
+        for index, (source, has_audio, _duration) in enumerate(videos, start=1):
             part = temp_directory / f"part_{index:05d}.mp4"
             print(
                 f"    [{index}/{len(videos)}] Converting: "
@@ -559,6 +732,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace MP4 files that already exist.",
     )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Process each directory without asking for confirmation.",
+    )
+    parser.add_argument(
+        "--preview-only",
+        action="store_true",
+        help="Show exactly what would be processed, but change nothing.",
+    )
     return parser
 
 
@@ -614,6 +797,8 @@ def main() -> int:
                 source_directory=directory,
                 output_directory=output_root,
                 overwrite=args.overwrite,
+                assume_yes=args.yes,
+                preview_only=args.preview_only,
             )
             if result == "created":
                 created += 1
